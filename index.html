@@ -61,6 +61,16 @@ summary{cursor:pointer;color:var(--brand);font-size:.9rem}
 .chip.region{font-weight:600}
 .chip.path{border-style:dashed}
 .more{margin:0 0 12px;width:100%;padding:10px;border-radius:10px;border:1px dashed var(--line);background:none;color:var(--brand);font-weight:600;cursor:pointer}
+.num{font-weight:700;color:var(--muted);font-size:.85rem}
+.sumcard{border-color:var(--brand)}
+.sumcard h2{margin:0 0 6px}
+.sumcard ul{padding-left:18px;margin:6px 0}
+.sumcard li{margin-bottom:6px}
+.ref{color:var(--brand);font-weight:600;text-decoration:none;font-size:.85rem}
+.pill{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:6px;border:1px solid currentColor;margin-left:4px;color:var(--muted)}
+.pill.contradictoria{color:var(--stop-ink)}.pill.limitada{color:var(--warn-ink)}.pill.consistente{color:var(--t1)}
+.settings{max-width:860px;margin:0 auto;padding:0 16px}
+.settings summary{padding:6px 0}
 footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);font-size:.8rem}
 </style>
 </head>
@@ -114,6 +124,19 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
     <div id="saved"></div>
   </section>
 </main>
+<section class="settings" aria-label="Ajustes del resumen">
+  <details id="settings">
+    <summary>Ajustes del resumen con IA</summary>
+    <div class="card" style="margin-top:8px">
+      <label for="svc-url">Dirección del servicio de resumen</label>
+      <input type="text" id="svc-url" placeholder="https://fisioevidencia.tu-cuenta.workers.dev" autocomplete="off" inputmode="url">
+      <label for="svc-code" style="margin-top:10px">Código de acceso</label>
+      <input type="text" id="svc-code" placeholder="El código que pusiste en Cloudflare" autocomplete="off">
+      <div class="row" style="margin-top:10px"><button class="primary" id="svc-save" type="button">Guardar ajustes</button><span class="meta" id="svc-msg"></span></div>
+      <p class="meta">Se guardan solo en este dispositivo.</p>
+    </div>
+  </details>
+</section>
 <footer>
   Fuente: Europe PMC (incluye todo MEDLINE/PubMed). Se excluyen publicaciones marcadas como retractadas. El tipo de estudio indica el diseño, no la calidad: una revisión sistemática puede ser de baja calidad. Comprueba siempre el artículo original.
 </footer>
@@ -248,6 +271,7 @@ async function run(){
   $("#qinfo").textContent = "Consulta enviada: "+base;
 
   addRecent(raw.trim(), [...state.tech]);
+  state.current = {question: raw.trim() + (techs.length ? " (técnicas: "+techs.map(t=>t.label).join(", ")+")" : ""), base, articles: []};
   const out = $("#results");
   const cached = cacheGet(base);
   if (cached){ showResults(cached, true); }
@@ -268,14 +292,18 @@ async function run(){
 const SHOW = 3;
 function showResults(all, fromCache){
   const seen = new Set(); let html = fromCache ? "<p class='meta'>Resultados guardados en este dispositivo; actualizando…</p>" : "";
+  const arts = []; let num = 0;
+  html += "<div class='card sumcard' id='summary'></div>";
   TIERS.forEach((t,i)=>{
     const list = all[i].hits.filter(r=>{ const k=r.pmid||r.doi||r.id; if(seen.has(k)) return false; seen.add(k); return true; });
     html += "<h2>"+esc(t.name)+" <span class='meta'>("+all[i].total+" en total)</span></h2>";
     if (!list.length){ html += "<p class='empty'>No se encontraron estudios de este tipo para esta búsqueda. Eso también es información: la evidencia de este nivel puede no existir.</p>"; return; }
-    list.forEach((r,j)=>{ const a = renderArt(r,t); html += j<SHOW ? a : a.replace("<article class='card art'","<article class='card art extra-"+t.key+"' hidden"); });
+    list.forEach((r,j)=>{ num++; const a = renderArt(r,t,num); arts.push(cache.get(r.pmid||r.doi||r.id)); html += j<SHOW ? a : a.replace("<article class='card art'","<article class='card art extra-"+t.key+"' hidden"); });
     if (list.length>SHOW) html += "<button class='more' data-more='"+t.key+"'>Ver "+(list.length-SHOW)+" más</button>";
   });
   $("#results").innerHTML = html;
+  if (state.current) state.current.articles = arts;
+  renderSummaryCard();
 }
 
 // ---- Caché de resultados (7 días, máx. 25 búsquedas) y recientes ----
@@ -323,16 +351,17 @@ function initVoice(){
 }
 
 const cache = new Map();
-function renderArt(r,t){
+function renderArt(r,t,num){
   const key = r.pmid||r.doi||r.id;
   const rec = {key, title:stripTags(r.title), authors:r.authorString||"", journal:(r.journalInfo&&r.journalInfo.journal&&r.journalInfo.journal.title)||r.journalTitle||"", year:r.pubYear||"", tier:t.key, url:articleUrl(r), doi:r.doi||"", pmid:r.pmid||"", concl: r.abstractText?conclusion(r.abstractText):"", abs: stripTags(r.abstractText||""), cited:r.citedByCount||0, oa:r.isOpenAccess==="Y"};
   cache.set(key, rec);
-  return artHTML(rec);
+  return artHTML(rec, num);
 }
-function artHTML(rec){
+function artHTML(rec, num){
   const t = TIERS.find(x=>x.key===rec.tier)||{cls:"t4",badge:"Estudio"};
   const isSaved = state.saved.some(s=>s.key===rec.key);
-  return "<article class='card art'>"+
+  return "<article class='card art'"+(num?" id='art-"+num+"'":"")+">"+
+    (num?"<span class='num'>["+num+"]</span> ":"")+
     "<span class='tier "+t.cls+"'>"+esc(t.badge)+"</span>"+(rec.oa?"<span class='meta'>Acceso abierto</span>":"")+
     "<h3>"+esc(rec.title)+"</h3>"+
     "<div class='meta'>"+esc(rec.authors.length>120?rec.authors.slice(0,120)+"…":rec.authors)+" · "+esc(rec.journal)+" · "+esc(rec.year)+" · citado "+rec.cited+" veces</div>"+
@@ -355,11 +384,65 @@ function renderSaved(){
   const el=$("#saved");
   if (!state.saved.length){ el.innerHTML="<p class='empty'>Aún no has guardado artículos.</p>"; return; }
   state.saved.forEach(s=>cache.set(s.key,s));
-  el.innerHTML = state.saved.map(artHTML).join("");
+  el.innerHTML = state.saved.map(r=>artHTML(r)).join("");
 }
 function exportSaved(){
   const txt = state.saved.map(s=>s.authors+" ("+s.year+"). "+s.title+" "+s.journal+"."+(s.doi?" doi:"+s.doi:"")+(s.pmid?" PMID: "+s.pmid:"")).join("\n");
   (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>{ $("#export").textContent="Copiado"; setTimeout(()=>$("#export").textContent="Copiar referencias guardadas",1500); }).catch(()=>{ $("#export").textContent="No se pudo copiar en este navegador"; });
+}
+
+// ---- Resumen con IA (a través del servicio propio; la clave nunca está en esta página) ----
+function getSvc(){ try{ return JSON.parse(localStorage.getItem("fe_svc")||"{}"); }catch(e){ return {}; } }
+function sumGet(k){ try{ const c=JSON.parse(localStorage.getItem("fe_sum")||"{}")[k]; if(c && Date.now()-c.t<30*864e5) return c.s; }catch(e){} return null; }
+function sumPut(k,s){ try{ const c=JSON.parse(localStorage.getItem("fe_sum")||"{}"); c[k]={t:Date.now(),s}; const ks=Object.keys(c).sort((a,b)=>c[b].t-c[a].t); ks.slice(40).forEach(x=>delete c[x]); localStorage.setItem("fe_sum",JSON.stringify(c)); }catch(e){} }
+const NIVEL = {guia:"Guías", revision:"Revisiones", eca:"Ensayos", mixto:"Varios niveles"};
+function refsHTML(refs, n){ return (refs||[]).filter(x=>Number.isInteger(x)&&x>=1&&x<=n).map(x=>"<a class='ref' href='#art-"+x+"' data-ref='"+x+"'>["+x+"]</a>").join(" "); }
+function renderSummaryCard(){
+  const el=$("#summary"); if(!el || !state.current) return;
+  const arts = state.current.articles;
+  if (!arts.length){ el.hidden=true; return; }
+  const s = sumGet(state.current.base);
+  if (s) return renderSummary(s);
+  const svc=getSvc();
+  el.innerHTML = "<h2>Resumen de la evidencia</h2><p class='meta'>Lee los "+arts.length+" resúmenes de abajo y los sintetiza con citas. Coste aproximado: 0,10 € por resumen.</p>"+
+    (svc.url ? "<button class='primary' id='sum-go' type='button'>Resumir la evidencia</button>" : "<button class='link' id='open-settings' type='button'>Activar el resumen con IA</button>");
+  const b=$("#sum-go"); if(b) b.onclick=summarize;
+  const o=$("#open-settings"); if(o) o.onclick=()=>{ $("#settings").open=true; $("#settings").scrollIntoView({behavior:"smooth"}); $("#svc-url").focus(); };
+}
+function renderSummary(s){
+  const el=$("#summary"); const n=state.current.articles.length;
+  const hall=(s.hallazgos||[]).filter(h=>refsHTML(h.refs,n));
+  const tec=(s.tecnicas||[]).filter(h=>refsHTML(h.refs,n));
+  el.innerHTML = "<h2>Resumen de la evidencia</h2>"+
+    "<p class='meta'>Certeza aproximada: <strong>"+esc(s.certeza||"")+"</strong>. Estimada a partir de los resúmenes, no es una evaluación GRADE.</p>"+
+    "<p>"+esc(s.resumen||"")+"</p>"+
+    (hall.length?"<h3>Hallazgos</h3><ul>"+hall.map(h=>"<li>"+esc(h.texto)+" "+refsHTML(h.refs,n)+"<span class='pill'>"+esc(NIVEL[h.nivel]||h.nivel)+"</span><span class='pill "+esc(h.solidez)+"'>"+esc(h.solidez)+"</span></li>").join("")+"</ul>":"<p class='empty'>Los artículos recuperados no permiten extraer hallazgos claros.</p>")+
+    (tec.length?"<h3>Por técnica</h3><ul>"+tec.map(h=>"<li><strong>"+esc(h.tecnica)+":</strong> "+esc(h.texto)+" "+refsHTML(h.refs,n)+"</li>").join("")+"</ul>":"")+
+    (s.lagunas?"<h3>Lo que falta por saber</h3><p>"+esc(s.lagunas)+"</p>":"")+
+    "<p class='meta'>Resumen generado por IA solo a partir de los artículos de esta página. Puede contener errores: toca cada cita para comprobarla. No es una recomendación clínica.</p>";
+}
+async function summarize(){
+  const svc=getSvc(), el=$("#summary"), cur=state.current;
+  el.innerHTML="<h2>Resumen de la evidencia</h2><p class='empty'>Leyendo "+cur.articles.length+" resúmenes… suele tardar entre 20 y 60 segundos.</p>";
+  try{
+    const res = await fetch(svc.url.replace(/\/+$/,""), {method:"POST", headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},
+      body: JSON.stringify({question: cur.question, articles: cur.articles.map(a=>({title:a.title, year:a.year, type:(TIERS.find(t=>t.key===a.tier)||{}).badge, abstract:a.abs}))})});
+    const data = await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
+    if (!res.ok || data.error) throw new Error(data.error || ("HTTP "+res.status));
+    if (state.current!==cur) return;
+    sumPut(cur.base, data); renderSummary(data);
+  }catch(e){
+    if (state.current!==cur) return;
+    el.innerHTML="<h2>Resumen de la evidencia</h2><div class='stop' style='display:block'>No se pudo generar el resumen: "+esc(e.message)+".</div><button class='primary' id='sum-go' type='button'>Reintentar</button>";
+    $("#sum-go").onclick=summarize;
+  }
+}
+function initSettings(){
+  const s=getSvc(); $("#svc-url").value=s.url||""; $("#svc-code").value=s.code||"";
+  $("#svc-save").onclick=()=>{ const v={url:$("#svc-url").value.trim(), code:$("#svc-code").value.trim()};
+    if (v.url && !/^https:\/\//.test(v.url)){ $("#svc-msg").textContent="La dirección debe empezar por https://"; return; }
+    try{ localStorage.setItem("fe_svc", JSON.stringify(v)); $("#svc-msg").textContent="Guardado"; }catch(e){ $("#svc-msg").textContent="No se pudo guardar en este navegador"; }
+    renderSummaryCard(); };
 }
 
 // ---- Interfaz ----
@@ -373,8 +456,9 @@ function init(){
   $("#q").addEventListener("keydown",e=>{ if(e.key==="Enter") run(); });
   $("#q").addEventListener("input",()=>{ $("#pii").style.display="none"; });
   document.addEventListener("click",e=>{ const k=e.target.getAttribute&&e.target.getAttribute("data-save"); if(k) toggleSave(k);
+    const rf=e.target.getAttribute&&e.target.getAttribute("data-ref"); if(rf){ e.preventDefault(); const art=document.getElementById("art-"+rf); if(art){ art.hidden=false; art.scrollIntoView({behavior:"smooth",block:"center"}); art.style.outline="2px solid var(--brand)"; setTimeout(()=>art.style.outline="",1500); } }
     const m=e.target.getAttribute&&e.target.getAttribute("data-more"); if(m){ document.querySelectorAll(".extra-"+m).forEach(a=>a.hidden=false); e.target.remove(); } });
-  renderRegions(); renderRecent(); initVoice();
+  renderRegions(); renderRecent(); initVoice(); initSettings();
   $("#export").onclick=exportSaved;
   const tabs={buscar:$("#tab-buscar"),guardados:$("#tab-guardados")};
   Object.entries(tabs).forEach(([name,btn])=>btn.onclick=()=>{
