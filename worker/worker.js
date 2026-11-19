@@ -1,11 +1,14 @@
 // FisioEvidencia: servicio de resumen de literatura (Cloudflare Worker).
-// Guarda la clave de la API de Anthropic fuera de la web pública.
+// Guarda la clave de la IA fuera de la web pública.
 //
 // Variables que hay que crear en Cloudflare (Settings > Variables and Secrets):
-//   ANTHROPIC_API_KEY  (Secret)  la clave de console.anthropic.com
+//   GEMINI_API_KEY     (Secret)  la clave gratuita de aistudio.google.com  <- opción por defecto
 //   ACCESS_CODE        (Secret)  un código que solo conozcas tú; la app lo pide una vez
+// Opcionales:
+//   GEMINI_MODEL       (Text)    modelo de Gemini; por defecto gemini-3.5-flash
+//   ANTHROPIC_API_KEY  (Secret)  si no hay clave de Gemini, se usa Claude (de pago)
 //
-// Se usa fetch directo porque el editor web de Cloudflare no permite instalar el SDK.
+// Se usa fetch directo porque el editor web de Cloudflare no permite instalar SDKs.
 
 const ALLOWED_ORIGINS = [
   "https://raw.githack.com",
@@ -25,6 +28,7 @@ Reglas estrictas:
 - Señala con claridad cuando la evidencia es contradictoria, escasa, de muestras pequeñas o de baja calidad según los propios autores.
 - Si los artículos no responden a la pregunta, dilo y deja los hallazgos vacíos.
 - La certeza es una estimación aproximada a partir de resúmenes, no una evaluación GRADE formal.
+- Responde SOLO con un objeto JSON con los campos: resumen (texto), certeza ("alta"|"moderada"|"baja"|"muy baja"|"insuficiente"), hallazgos (lista de {texto, nivel: "guia"|"revision"|"eca"|"mixto", solidez: "consistente"|"contradictoria"|"limitada", refs: [números de artículo]}), tecnicas (lista de {tecnica, texto, refs}), lagunas (texto).
 - Escribe en español, frases cortas y claras. Conserva en inglés solo los nombres de escalas o técnicas que no tengan traducción habitual.`;
 
 const SCHEMA = {
@@ -102,6 +106,56 @@ export default {
       `[${i + 1}] Tipo: ${String(a.type || "").slice(0, 40)} | Año: ${String(a.year || "").slice(0, 4)}\nTítulo: ${String(a.title || "").slice(0, 400)}\nResumen: ${String(a.abstract || "Sin resumen").slice(0, MAX_ABSTRACT)}`
     ).join("\n\n");
 
+    const userText = `Pregunta del fisioterapeuta: ${question}\n\nArtículos recuperados (${articles.length}):\n\n${list}`;
+    let out;
+    try {
+      out = env.GEMINI_API_KEY ? await callGemini(env, userText) : await callClaude(env, userText);
+    } catch (e) {
+      return json({ error: e.message, detail: e.detail }, e.status || 502, origin);
+    }
+    out.n = articles.length;
+    return json(out, 200, origin);
+  },
+};
+
+function fail(message, status, detail) { const e = new Error(message); e.status = status; e.detail = detail; return e; }
+
+async function callGemini(env, userText) {
+  const model = env.GEMINI_MODEL || "gemini-3.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const base = { system_instruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: "user", parts: [{ text: userText }] }] };
+  const send = (generationConfig) => fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+    body: JSON.stringify({ ...base, generationConfig }),
+  });
+  // Formato estructurado documentado; si esta versión de la API no lo acepta, se pide JSON por instrucciones.
+  let res = await send({ responseFormat: { text: { mimeType: "application/json", schema: SCHEMA } } });
+  if (res.status === 400) {
+    res = await send({ responseMimeType: "application/json" });
+  }
+  if (res.status === 429) throw fail("Has llegado al límite gratuito de Gemini por ahora. Prueba en un minuto o mañana.", 429);
+  if (!res.ok) throw fail("Gemini respondió con un error (" + res.status + ")", 502, (await res.text()).slice(0, 300));
+  const data = await res.json();
+  const cand = (data.candidates || [])[0];
+  if (!cand || !cand.content) throw fail("Gemini no ha podido resumir esta búsqueda", 422, JSON.stringify(data.promptFeedback || {}).slice(0, 200));
+  if (cand.finishReason === "MAX_TOKENS") throw fail("El resumen salió demasiado largo; prueba con menos artículos", 422);
+  const text = (cand.content.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join("");
+  return parseOut(text);
+}
+
+function parseOut(text) {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "");
+  let out;
+  try { out = JSON.parse(t); } catch { throw fail("La respuesta de la IA no tenía el formato esperado", 502); }
+  if (typeof out !== "object" || !out) throw fail("La respuesta de la IA no tenía el formato esperado", 502);
+  out.hallazgos = Array.isArray(out.hallazgos) ? out.hallazgos : [];
+  out.tecnicas = Array.isArray(out.tecnicas) ? out.tecnicas : [];
+  return out;
+}
+
+async function callClaude(env, userText) {
+  if (!env.ANTHROPIC_API_KEY) throw fail("Falta la clave de la IA en Cloudflare (GEMINI_API_KEY)", 500);
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -116,22 +170,12 @@ export default {
         fallbacks: "default",
         output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
         system: SYSTEM,
-        messages: [{ role: "user", content: `Pregunta del fisioterapeuta: ${question}\n\nArtículos recuperados (${articles.length}):\n\n${list}` }],
+        messages: [{ role: "user", content: userText }],
       }),
     });
-
-    if (!res.ok) {
-      const detail = await res.text();
-      return json({ error: "El servicio de IA respondió con un error (" + res.status + ")", detail: detail.slice(0, 300) }, 502, origin);
-    }
+    if (!res.ok) throw fail("Claude respondió con un error (" + res.status + ")", 502, (await res.text()).slice(0, 300));
     const msg = await res.json();
-    if (msg.stop_reason === "refusal") return json({ error: "La IA no ha podido resumir esta búsqueda" }, 422, origin);
-    if (msg.stop_reason === "max_tokens") return json({ error: "El resumen salió demasiado largo; prueba con menos artículos" }, 422, origin);
-    const text = (msg.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-    let out;
-    try { out = JSON.parse(text); } catch { return json({ error: "La respuesta de la IA no tenía el formato esperado" }, 502, origin); }
-    out.n = articles.length;
-    out.usage = { input: msg.usage?.input_tokens, output: msg.usage?.output_tokens };
-    return json(out, 200, origin);
-  },
-};
+    if (msg.stop_reason === "refusal") throw fail("La IA no ha podido resumir esta búsqueda", 422);
+    if (msg.stop_reason === "max_tokens") throw fail("El resumen salió demasiado largo; prueba con menos artículos", 422);
+    return parseOut((msg.content || []).filter(b => b.type === "text").map(b => b.text).join(""));
+}

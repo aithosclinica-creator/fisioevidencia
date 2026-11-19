@@ -133,7 +133,7 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
       <label for="svc-code" style="margin-top:10px">Código de acceso</label>
       <input type="text" id="svc-code" placeholder="El código que pusiste en Cloudflare" autocomplete="off">
       <div class="row" style="margin-top:10px"><button class="primary" id="svc-save" type="button">Guardar ajustes</button><span class="meta" id="svc-msg"></span></div>
-      <p class="meta">Se guardan solo en este dispositivo.</p>
+      <p class="meta">Se guardan solo en este dispositivo. Con Gemini gratuito, Google puede usar lo enviado para mejorar sus productos; aquí solo se envían resúmenes de artículos públicos, nunca datos de pacientes.</p>
     </div>
   </details>
 </section>
@@ -404,8 +404,10 @@ function renderSummaryCard(){
   const s = sumGet(state.current.base);
   if (s) return renderSummary(s);
   const svc=getSvc();
-  el.innerHTML = "<h2>Resumen de la evidencia</h2><p class='meta'>Lee los "+arts.length+" resúmenes de abajo y los sintetiza con citas. Coste aproximado: 0,10 € por resumen.</p>"+
-    (svc.url ? "<button class='primary' id='sum-go' type='button'>Resumir la evidencia</button>" : "<button class='link' id='open-settings' type='button'>Activar el resumen con IA</button>");
+  el.innerHTML = "<h2>Resumen de la evidencia</h2><p class='meta'>La IA lee los "+arts.length+" resúmenes de abajo y los sintetiza con citas a cada artículo.</p>"+
+    "<div class='row'>"+(svc.url ? "<button class='primary' id='sum-go' type='button'>Resumir aquí</button>" : "<button class='link' id='open-settings' type='button'>Activar el resumen gratis</button>")+
+    "<button class='link' id='copy-claude' type='button'>Copiar para Claude</button></div><p class='meta' id='copy-msg'></p>";
+  $("#copy-claude").onclick=copyForClaude;
   const b=$("#sum-go"); if(b) b.onclick=summarize;
   const o=$("#open-settings"); if(o) o.onclick=()=>{ $("#settings").open=true; $("#settings").scrollIntoView({behavior:"smooth"}); $("#svc-url").focus(); };
 }
@@ -419,7 +421,36 @@ function renderSummary(s){
     (hall.length?"<h3>Hallazgos</h3><ul>"+hall.map(h=>"<li>"+esc(h.texto)+" "+refsHTML(h.refs,n)+"<span class='pill'>"+esc(NIVEL[h.nivel]||h.nivel)+"</span><span class='pill "+esc(h.solidez)+"'>"+esc(h.solidez)+"</span></li>").join("")+"</ul>":"<p class='empty'>Los artículos recuperados no permiten extraer hallazgos claros.</p>")+
     (tec.length?"<h3>Por técnica</h3><ul>"+tec.map(h=>"<li><strong>"+esc(h.tecnica)+":</strong> "+esc(h.texto)+" "+refsHTML(h.refs,n)+"</li>").join("")+"</ul>":"")+
     (s.lagunas?"<h3>Lo que falta por saber</h3><p>"+esc(s.lagunas)+"</p>":"")+
-    "<p class='meta'>Resumen generado por IA solo a partir de los artículos de esta página. Puede contener errores: toca cada cita para comprobarla. No es una recomendación clínica.</p>";
+    "<p class='meta'>Resumen generado por IA solo a partir de los artículos de esta página. Puede contener errores: toca cada cita para comprobarla. No es una recomendación clínica.</p>"+
+    "<button class='link' id='copy-claude' type='button'>Copiar para Claude</button> <span class='meta' id='copy-msg'></span>";
+  $("#copy-claude").onclick=copyForClaude;
+}
+const CLAUDE_RULES = `Eres un asistente que resume literatura científica para un fisioterapeuta colegiado en España.
+
+Reglas estrictas:
+- Usa SOLO la información de los resúmenes de artículos que te doy abajo. No añadas conocimiento propio ni estudios que no estén en la lista.
+- Cada afirmación debe citar entre corchetes el número del artículo que la respalda, por ejemplo [3]. Si algo no está respaldado por un artículo de la lista, no lo escribas.
+- Describe lo que hicieron y encontraron los estudios. No des recomendaciones ni te dirijas a un paciente concreto: es un resumen de la literatura, no un consejo clínico.
+- Da prioridad a guías de práctica clínica, después a revisiones sistemáticas y después a ensayos.
+- Señala con claridad cuando la evidencia es contradictoria, escasa, de muestras pequeñas o de baja calidad.
+- Si los artículos no responden a la pregunta, dilo.
+
+Formato de la respuesta, en español:
+1. Visión general (2 a 4 frases) y certeza aproximada (alta, moderada, baja, muy baja o insuficiente), aclarando que se estima a partir de resúmenes y no es una evaluación GRADE.
+2. Hallazgos principales, cada uno con sus citas, su nivel (guía, revisión o ensayo) y si la evidencia es consistente, contradictoria o limitada.
+3. Qué dice la evidencia de cada técnica que aparezca (ejercicio, EPI, punción seca, terapia manual, etc.), con citas.
+4. Lo que falta por saber.`;
+function buildClaudePrompt(){
+  const cur=state.current;
+  const list=cur.articles.map((a,i)=>"["+(i+1)+"] "+((TIERS.find(t=>t.key===a.tier)||{}).badge||"")+" · "+a.year+" · "+a.title+(a.doi?" · doi:"+a.doi:a.pmid?" · PMID "+a.pmid:"")+"\nResumen: "+(a.abs||"Sin resumen")).join("\n\n");
+  return CLAUDE_RULES+"\n\nPregunta: "+cur.question+"\n\nArtículos ("+cur.articles.length+"):\n\n"+list;
+}
+function copyForClaude(){
+  const txt=buildClaudePrompt(), msg=$("#copy-msg");
+  const done=()=>{ msg.innerHTML="Copiado. Abre <a href='https://claude.ai/new' target='_blank' rel='noopener'>Claude</a>, pega y envía. Las citas [n] coinciden con los números de esta página."; };
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done).catch(()=>{
+    msg.innerHTML="Tu navegador no deja copiar automáticamente. Mantén pulsado el texto, selecciona todo y copia:<textarea readonly style='width:100%;height:160px;margin-top:6px'>"+esc(txt)+"</textarea>";
+  });
 }
 async function summarize(){
   const svc=getSvc(), el=$("#summary"), cur=state.current;
