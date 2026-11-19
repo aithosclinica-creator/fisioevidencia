@@ -1,0 +1,11 @@
+{
+  "name": "FisioEvidencia",
+  "short_name": "FisioEvidencia",
+  "description": "Biblioteca de literatura científica para fisioterapeutas. No ofrece recomendaciones clínicas.",
+  "lang": "es",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f7f5",
+  "theme_color": "#0f5c5a",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}

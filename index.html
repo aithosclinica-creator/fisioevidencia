@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FisioEvidencia</title>
+<meta name="description" content="Biblioteca de literatura científica para fisioterapeutas. No ofrece recomendaciones clínicas.">
+<meta name="theme-color" content="#0f5c5a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#f6f7f5; --card:#ffffff; --ink:#1b2422; --muted:#5d6b68; --line:#dfe4e2;
+  --brand:#0f5c5a; --brand-ink:#ffffff; --warn-bg:#fff4d6; --warn-ink:#6b4a00;
+  --stop-bg:#fde3e1; --stop-ink:#8a1c12;
+  --t1:#1e6b3a; --t2:#2a5d9f; --t3:#6a4fa3; --t4:#6b6b6b;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121615; --card:#1b201f; --ink:#e7ecea; --muted:#9aa8a4; --line:#2c3432;
+    --brand:#4fb3ad; --brand-ink:#0b1514; --warn-bg:#3a2f12; --warn-ink:#f3d48a;
+    --stop-bg:#3d1714; --stop-ink:#ffb4ab;
+    --t1:#6fcf8f; --t2:#8ab4f0; --t3:#bba6ec; --t4:#a9a9a9;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--brand);color:var(--brand-ink);padding:14px 16px}
+header h1{margin:0;font-size:1.2rem}
+header p{margin:2px 0 0;font-size:.85rem;opacity:.9}
+main{max-width:860px;margin:0 auto;padding:16px}
+.notice{background:var(--warn-bg);color:var(--warn-ink);border-radius:10px;padding:10px 12px;font-size:.88rem;margin-bottom:14px}
+.stop{background:var(--stop-bg);color:var(--stop-ink);border-radius:10px;padding:10px 12px;font-size:.9rem;margin:10px 0;display:none}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+label{font-weight:600;font-size:.9rem;display:block;margin-bottom:6px}
+input[type=text]{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:1rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:.88rem;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+select{padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+button.primary{background:var(--brand);color:var(--brand-ink);border:0;border-radius:10px;padding:12px 18px;font-weight:600;font-size:1rem;cursor:pointer}
+button.link{background:none;border:0;color:var(--brand);cursor:pointer;padding:0;font-size:.9rem}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tabs button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;cursor:pointer}
+.tabs button[aria-selected=true]{border-color:var(--brand);color:var(--brand)}
+h2{font-size:1rem;margin:18px 0 8px}
+.tier{display:inline-block;font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid currentColor;margin-right:6px}
+.tier.t1{color:var(--t1)}.tier.t2{color:var(--t2)}.tier.t3{color:var(--t3)}.tier.t4{color:var(--t4)}
+.art h3{font-size:1rem;margin:6px 0}
+.meta{color:var(--muted);font-size:.85rem}
+.concl{margin:8px 0 0;font-size:.93rem}
+details{margin-top:8px}
+summary{cursor:pointer;color:var(--brand);font-size:.9rem}
+.actions{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap}
+.actions a{color:var(--brand);font-size:.9rem}
+.empty{color:var(--muted);font-size:.92rem}
+.qrow{display:flex;gap:8px}
+.mic{flex:0 0 52px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:1.3rem;cursor:pointer}
+.mic.on{background:var(--stop-bg);border-color:var(--stop-ink)}
+.chip.region{font-weight:600}
+.chip.path{border-style:dashed}
+.more{margin:0 0 12px;width:100%;padding:10px;border-radius:10px;border:1px dashed var(--line);background:none;color:var(--brand);font-weight:600;cursor:pointer}
+footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);font-size:.8rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>FisioEvidencia</h1>
+  <p>Biblioteca de literatura científica para fisioterapeutas · prototipo</p>
+</header>
+<main>
+  <div class="notice"><strong>Esta herramienta no da recomendaciones clínicas.</strong> Muestra lo que publica la literatura, con su tipo de estudio y su enlace. La decisión terapéutica es siempre del fisioterapeuta. <strong>No escribas datos de pacientes</strong>: busca por patología y técnica.</div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-buscar" aria-selected="true">Buscar</button>
+    <button role="tab" id="tab-guardados" aria-selected="false">Guardados (<span id="nsaved">0</span>)</button>
+  </div>
+
+  <section id="view-buscar">
+    <div class="card">
+      <label>Acceso rápido por región</label>
+      <div class="chips" id="regions"></div>
+      <div class="chips" id="paths"></div>
+      <label for="q" style="margin-top:8px">Patología o pregunta (en español o inglés)</label>
+      <div class="qrow">
+        <input type="text" id="q" placeholder="Ej.: tendinopatía rotuliana, epicondilalgia, lumbalgia crónica" autocomplete="off" enterkeyhint="search">
+        <button type="button" id="mic" class="mic" aria-label="Buscar por voz" title="Buscar por voz" hidden>🎤</button>
+      </div>
+      <p class="meta" id="micinfo" hidden style="margin:4px 0 0">Dicta solo la patología y la técnica, nunca datos del paciente. El dictado lo procesa el servicio de voz de tu navegador.</p>
+      <div id="pii" class="stop"></div>
+      <div id="recentwrap" hidden><label style="margin-top:10px">Recientes</label><div class="chips" id="recent"></div></div>
+      <label style="margin-top:12px">Técnicas de la clínica (opcional)</label>
+      <div class="chips" id="chips"></div>
+      <div class="row">
+        <label for="years" style="margin:0">Publicados desde</label>
+        <select id="years">
+          <option value="5">últimos 5 años</option>
+          <option value="10" selected>últimos 10 años</option>
+          <option value="20">últimos 20 años</option>
+          <option value="0">cualquier año</option>
+        </select>
+        <button class="primary" id="go">Buscar evidencia</button>
+      </div>
+      <p class="meta" id="qinfo" style="margin:10px 0 0"></p>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section id="view-guardados" hidden>
+    <div class="row" style="margin-bottom:10px">
+      <button class="link" id="export">Copiar referencias guardadas</button>
+    </div>
+    <div id="saved"></div>
+  </section>
+</main>
+<footer>
+  Fuente: Europe PMC (incluye todo MEDLINE/PubMed). Se excluyen publicaciones marcadas como retractadas. El tipo de estudio indica el diseño, no la calidad: una revisión sistemática puede ser de baja calidad. Comprueba siempre el artículo original.
+</footer>
+
+<script>
+"use strict";
+// ---- Diccionario español -> inglés (términos de búsqueda) ----
+const DICT = {
+  "tendinopatía rotuliana":"patellar tendinopathy","tendinopatia rotuliana":"patellar tendinopathy",
+  "tendinopatía aquílea":"achilles tendinopathy","tendinopatia aquilea":"achilles tendinopathy","tendinopatía aquiles":"achilles tendinopathy",
+  "epicondilalgia":"lateral epicondylalgia","epicondilitis":"lateral epicondylalgia","codo de tenista":"lateral epicondylalgia",
+  "fascitis plantar":"plantar fasciitis","fasciopatía plantar":"plantar fasciitis",
+  "lumbalgia crónica":"chronic low back pain","lumbalgia cronica":"chronic low back pain","lumbalgia":"low back pain","dolor lumbar":"low back pain",
+  "cervicalgia":"neck pain","dolor cervical":"neck pain","latigazo cervical":"whiplash",
+  "síndrome subacromial":"subacromial pain syndrome","sindrome subacromial":"subacromial pain syndrome","hombro doloroso":"shoulder pain",
+  "tendinopatía del manguito rotador":"rotator cuff tendinopathy","manguito rotador":"rotator cuff",
+  "capsulitis adhesiva":"adhesive capsulitis","hombro congelado":"frozen shoulder",
+  "síndrome femoropatelar":"patellofemoral pain","sindrome femoropatelar":"patellofemoral pain","dolor femoropatelar":"patellofemoral pain",
+  "rotura de ligamento cruzado anterior":"anterior cruciate ligament reconstruction","lca":"anterior cruciate ligament",
+  "esguince de tobillo":"ankle sprain","inestabilidad crónica de tobillo":"chronic ankle instability",
+  "artrosis de rodilla":"knee osteoarthritis","gonartrosis":"knee osteoarthritis","artrosis de cadera":"hip osteoarthritis","coxartrosis":"hip osteoarthritis",
+  "túnel carpiano":"carpal tunnel syndrome","tunel carpiano":"carpal tunnel syndrome",
+  "lesión de isquiotibiales":"hamstring injury","isquiotibiales":"hamstring",
+  "pubalgia":"groin pain","dolor inguinal":"groin pain","trocanteritis":"greater trochanteric pain syndrome",
+  "síndrome del dolor trocantéreo":"greater trochanteric pain syndrome","fibromialgia":"fibromyalgia",
+  "cefalea tensional":"tension-type headache","migraña":"migraine","disfunción temporomandibular":"temporomandibular disorders","atm":"temporomandibular disorders",
+  "radiculopatía":"radiculopathy","ciática":"sciatica","ciatica":"sciatica","hernia discal":"disc herniation",
+  "puntos gatillo":"myofascial trigger points","dolor miofascial":"myofascial pain","tendinopatía":"tendinopathy","tendinopatia":"tendinopathy"
+};
+const TECH = [
+  {id:"epi", label:"EPI (electrólisis percutánea)", q:'("percutaneous electrolysis" OR "intratissue percutaneous electrolysis" OR "percutaneous needle electrolysis")'},
+  {id:"pens", label:"Neuromodulación percutánea", q:'("percutaneous electrical nerve stimulation" OR "percutaneous neuromodulation" OR "percutaneous peripheral nerve stimulation")'},
+  {id:"dn", label:"Punción seca", q:'("dry needling")'},
+  {id:"rf", label:"Radiofrecuencia / diatermia", q:'("radiofrequency" OR "capacitive-resistive" OR "diathermy" OR "TECAR")'},
+  {id:"eco", label:"Guiado por ecografía", q:'("ultrasound-guided" OR "ultrasound guided")'},
+  {id:"ex", label:"Ejercicio", q:'("exercise therapy" OR "exercise" OR "resistance training" OR "loading program")'},
+  {id:"tm", label:"Terapia manual", q:'("manual therapy" OR "joint mobilization" OR "spinal manipulation" OR "soft tissue mobilization")'}
+];
+const TIERS = [
+  {key:"gl", cls:"t1", name:"Guías de práctica clínica", badge:"Guía", q:'(PUB_TYPE:"Practice Guideline" OR PUB_TYPE:"Guideline" OR TITLE:"clinical practice guideline")'},
+  {key:"sr", cls:"t2", name:"Revisiones sistemáticas y metaanálisis", badge:"Rev. sistemática", q:'(PUB_TYPE:"Systematic Review" OR PUB_TYPE:"Meta-Analysis" OR TITLE:"systematic review" OR TITLE:"meta-analysis")'},
+  {key:"rct", cls:"t3", name:"Ensayos clínicos aleatorizados", badge:"ECA", q:'(PUB_TYPE:"Randomized Controlled Trial" OR TITLE:"randomized controlled trial" OR TITLE:"randomised controlled trial")'}
+];
+
+// ---- Detección de datos personales / de paciente ----
+function checkPII(text){
+  const t = text.trim();
+  const block = [
+    [/\b\d{8}\s?[A-Za-z]\b/, "parece un DNI"],
+    [/\b[XYZxyz]\d{7}[A-Za-z]\b/, "parece un NIE"],
+    [/\b[6789]\d{2}\s?\d{3}\s?\d{3}\b/, "parece un teléfono"],
+    [/[^\s@]+@[^\s@]+\.[^\s@]+/, "parece un email"],
+    [/\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/, "parece una fecha (¿de nacimiento?)"],
+    [/\b(sr|sra|don|doña|dña)\.?\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+/, "parece un nombre de persona"]
+  ];
+  for (const [re, why] of block) if (re.test(t)) return {level:"block", why};
+  if (/\b(mi paciente|el paciente|la paciente|paciente de|\d{1,3}\s?años)\b/i.test(t))
+    return {level:"warn", why:"describe a un paciente concreto"};
+  return null;
+}
+
+// ---- Estado y almacenamiento ----
+const state = {tech:new Set(), saved:[]};
+function loadSaved(){ try{ state.saved = JSON.parse(localStorage.getItem("fe_saved")||"[]"); }catch(e){ state.saved=[]; } }
+function storeSaved(){ try{ localStorage.setItem("fe_saved", JSON.stringify(state.saved)); }catch(e){} document.getElementById("nsaved").textContent = state.saved.length; }
+
+// ---- Utilidades ----
+const $ = s => document.querySelector(s);
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function stripTags(s){ const d=document.createElement("div"); d.innerHTML=String(s||"").replace(/<(h\d|p|br)[^>]*>/gi,"\n$&").replace(/<\/(h\d|p)>/gi,"$&\n"); return (d.textContent||"").replace(/\n{2,}/g,"\n").trim(); }
+const REGIONS = {
+  "Hombro":["síndrome subacromial","manguito rotador","capsulitis adhesiva"],
+  "Codo y muñeca":["epicondilalgia","túnel carpiano"],
+  "Columna":["lumbalgia crónica","cervicalgia","ciática","latigazo cervical"],
+  "Cadera e ingle":["síndrome del dolor trocantéreo","pubalgia","artrosis de cadera"],
+  "Rodilla":["tendinopatía rotuliana","síndrome femoropatelar","artrosis de rodilla","lca"],
+  "Tobillo y pie":["tendinopatía aquílea","esguince de tobillo","inestabilidad crónica de tobillo","fascitis plantar"],
+  "Cabeza y ATM":["cefalea tensional","disfunción temporomandibular"],
+  "Muscular":["lesión de isquiotibiales","dolor miofascial","fibromialgia"]
+};
+function translate(q){
+  let out = " "+q.toLowerCase().trim()+" ";
+  const keys = Object.keys(DICT).sort((a,b)=>b.length-a.length);
+  const hits=[];
+  for (const k of keys){
+    const re = new RegExp("(^|[^\\p{L}])"+k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?=$|[^\\p{L}])","gu");
+    if (re.test(out)){ const idx=hits.length; out = out.replace(re,(m,pre)=>pre+" \u0000"+idx+"\u0000 "); hits.push(DICT[k]); }
+  }
+  const STOP = new Set("tratamiento tratamientos tratar terapia evidencia sobre que qué del de la el los las en con para por y o un una al cual cuál mejor eficacia efectividad pacientes paciente".split(" "));
+  out = out.split(/\s+/).filter(w=>!STOP.has(w)).join(" ");
+  out = out.replace(/\u0000(\d+)\u0000/g,(m,i)=>'"'+hits[+i]+'"').replace(/\s+/g," ").trim();
+  return {query: out, translated: hits.length>0};
+}
+function conclusion(abs){
+  const txt = stripTags(abs);
+  const m = txt.match(/(conclusions?|interpretation|implications? for practice|authors'? conclusions?)\s*[:.\n]\s*([\s\S]+)$/i);
+  if (m) return m[2].trim().slice(0,700);
+  const sents = txt.split(/(?<=\.)\s+/); return sents.slice(-2).join(" ").slice(0,500);
+}
+function articleUrl(r){
+  if (r.pmid) return "https://pubmed.ncbi.nlm.nih.gov/"+r.pmid+"/";
+  if (r.doi) return "https://doi.org/"+r.doi;
+  return "https://europepmc.org/article/"+r.source+"/"+r.id;
+}
+
+// ---- Búsqueda en Europe PMC ----
+async function searchTier(base, tier){
+  const q = base+" AND "+tier.q+' AND SRC:MED NOT PUB_TYPE:"Retracted Publication" NOT PUB_TYPE:"Retraction of Publication" NOT TITLE:"retracted"';
+  const url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&resultType=core&pageSize=8&query="+encodeURIComponent(q);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP "+res.status);
+  const data = await res.json();
+  return {hits:(data.resultList&&data.resultList.result)||[], total:data.hitCount||0};
+}
+
+async function run(){
+  const raw = $("#q").value;
+  const p = checkPII(raw);
+  const box = $("#pii");
+  if (p && p.level==="block"){ box.style.display="block"; box.innerHTML="<strong>Búsqueda bloqueada:</strong> el texto "+esc(p.why)+". Quita cualquier dato identificativo y busca solo por patología o técnica."; return; }
+  if (p && p.level==="warn"){ box.style.display="block"; box.innerHTML="<strong>Aviso:</strong> la búsqueda "+esc(p.why)+". Esta biblioteca es general: busca por patología y técnica, sin describir a un paciente."; return; }
+  box.style.display="none";
+  if (!raw.trim()){ $("#q").focus(); return; }
+
+  const tr = translate(raw);
+  const parts = ["("+tr.query+")"];
+  const techs = TECH.filter(t=>state.tech.has(t.id));
+  if (techs.length) parts.push("("+techs.map(t=>t.q).join(" OR ")+")");
+  const yrs = +$("#years").value;
+  if (yrs){ const y=new Date().getFullYear(); parts.push("PUB_YEAR:["+(y-yrs)+" TO "+y+"]"); }
+  const base = parts.join(" AND ");
+  $("#qinfo").textContent = "Consulta enviada: "+base;
+
+  addRecent(raw.trim(), [...state.tech]);
+  const out = $("#results");
+  const cached = cacheGet(base);
+  if (cached){ showResults(cached, true); }
+  else out.innerHTML = '<p class="empty">Buscando en Europe PMC…</p>';
+  try{
+    const all = await Promise.all(TIERS.map(t=>searchTier(base,t)));
+    cachePut(base, all);
+    showResults(all, false);
+  }catch(e){
+    if (!cached) out.innerHTML = "<div class='stop' style='display:block'><strong>No se pudo conectar con la base de datos científica.</strong><br>"+
+      (navigator.onLine===false ? "Tu dispositivo no tiene conexión a internet." :
+       "Si has abierto el archivo dentro de la app de Claude, esa vista previa bloquea internet. Descárgalo y ábrelo con Chrome, Safari o Edge.")+
+      "<br><span class='meta'>Detalle técnico: "+esc(e.message)+"</span></div>";
+  }
+  out.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+const SHOW = 3;
+function showResults(all, fromCache){
+  const seen = new Set(); let html = fromCache ? "<p class='meta'>Resultados guardados en este dispositivo; actualizando…</p>" : "";
+  TIERS.forEach((t,i)=>{
+    const list = all[i].hits.filter(r=>{ const k=r.pmid||r.doi||r.id; if(seen.has(k)) return false; seen.add(k); return true; });
+    html += "<h2>"+esc(t.name)+" <span class='meta'>("+all[i].total+" en total)</span></h2>";
+    if (!list.length){ html += "<p class='empty'>No se encontraron estudios de este tipo para esta búsqueda. Eso también es información: la evidencia de este nivel puede no existir.</p>"; return; }
+    list.forEach((r,j)=>{ const a = renderArt(r,t); html += j<SHOW ? a : a.replace("<article class='card art'","<article class='card art extra-"+t.key+"' hidden"); });
+    if (list.length>SHOW) html += "<button class='more' data-more='"+t.key+"'>Ver "+(list.length-SHOW)+" más</button>";
+  });
+  $("#results").innerHTML = html;
+}
+
+// ---- Caché de resultados (7 días, máx. 25 búsquedas) y recientes ----
+function cacheGet(k){ try{ const c=JSON.parse(localStorage.getItem("fe_cache")||"{}")[k]; if(c && Date.now()-c.t < 7*864e5) return c.all; }catch(e){} return null; }
+function cachePut(k, all){ try{ const c=JSON.parse(localStorage.getItem("fe_cache")||"{}"); c[k]={t:Date.now(), all};
+  const ks=Object.keys(c).sort((a,b)=>c[b].t-c[a].t); ks.slice(25).forEach(x=>delete c[x]); localStorage.setItem("fe_cache", JSON.stringify(c)); }catch(e){} }
+function getRecent(){ try{ return JSON.parse(localStorage.getItem("fe_recent")||"[]"); }catch(e){ return []; } }
+function addRecent(q, tech){ const r=getRecent().filter(x=>!(x.q===q && x.tech.join()===tech.join())); r.unshift({q,tech}); try{ localStorage.setItem("fe_recent", JSON.stringify(r.slice(0,8))); }catch(e){} renderRecent(); }
+function renderRecent(){
+  const r=getRecent(), el=$("#recent"); $("#recentwrap").hidden = !r.length; el.innerHTML="";
+  r.forEach(x=>{ const b=document.createElement("button"); b.className="chip"; b.type="button";
+    const tl = x.tech.map(id=>(TECH.find(t=>t.id===id)||{}).label).filter(Boolean);
+    b.textContent = x.q + (tl.length?" · "+tl.join(", "):"");
+    b.onclick=()=>{ $("#q").value=x.q; setTech(x.tech); run(); }; el.appendChild(b); });
+}
+function setTech(ids){ state.tech=new Set(ids); document.querySelectorAll("#chips .chip").forEach(b=>b.setAttribute("aria-pressed", state.tech.has(b.dataset.id)?"true":"false")); }
+
+// ---- Regiones ----
+function renderRegions(){
+  const reg=$("#regions"), paths=$("#paths");
+  Object.keys(REGIONS).forEach(name=>{ const b=document.createElement("button"); b.className="chip region"; b.type="button"; b.textContent=name; b.setAttribute("aria-pressed","false");
+    b.onclick=()=>{ const open=b.getAttribute("aria-pressed")==="true";
+      reg.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed","false")); paths.innerHTML="";
+      if (open) return; b.setAttribute("aria-pressed","true");
+      REGIONS[name].forEach(p=>{ const c=document.createElement("button"); c.className="chip path"; c.type="button"; c.textContent = p==="lca"?"LCA":p.charAt(0).toUpperCase()+p.slice(1);
+        c.onclick=()=>{ $("#q").value = c.textContent; run(); }; paths.appendChild(c); }); };
+    reg.appendChild(b); });
+}
+
+// ---- Voz ----
+function initVoice(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  const mic=$("#mic"); mic.hidden=false; $("#micinfo").hidden=false;
+  let rec=null;
+  mic.onclick=()=>{
+    if (rec){ rec.stop(); return; }
+    rec = new SR(); rec.lang="es-ES"; rec.interimResults=true; rec.maxAlternatives=1;
+    mic.classList.add("on");
+    rec.onresult=e=>{ let t=""; for(const r of e.results) t+=r[0].transcript; $("#q").value=t.trim(); if (e.results[e.results.length-1].isFinal) { rec.stop(); } };
+    rec.onend=()=>{ mic.classList.remove("on"); rec=null; if ($("#q").value.trim()) run(); };
+    rec.onerror=()=>{ mic.classList.remove("on"); rec=null; };
+    rec.start();
+  };
+}
+
+const cache = new Map();
+function renderArt(r,t){
+  const key = r.pmid||r.doi||r.id;
+  const rec = {key, title:stripTags(r.title), authors:r.authorString||"", journal:(r.journalInfo&&r.journalInfo.journal&&r.journalInfo.journal.title)||r.journalTitle||"", year:r.pubYear||"", tier:t.key, url:articleUrl(r), doi:r.doi||"", pmid:r.pmid||"", concl: r.abstractText?conclusion(r.abstractText):"", abs: stripTags(r.abstractText||""), cited:r.citedByCount||0, oa:r.isOpenAccess==="Y"};
+  cache.set(key, rec);
+  return artHTML(rec);
+}
+function artHTML(rec){
+  const t = TIERS.find(x=>x.key===rec.tier)||{cls:"t4",badge:"Estudio"};
+  const isSaved = state.saved.some(s=>s.key===rec.key);
+  return "<article class='card art'>"+
+    "<span class='tier "+t.cls+"'>"+esc(t.badge)+"</span>"+(rec.oa?"<span class='meta'>Acceso abierto</span>":"")+
+    "<h3>"+esc(rec.title)+"</h3>"+
+    "<div class='meta'>"+esc(rec.authors.length>120?rec.authors.slice(0,120)+"…":rec.authors)+" · "+esc(rec.journal)+" · "+esc(rec.year)+" · citado "+rec.cited+" veces</div>"+
+    (rec.concl?"<p class='concl'><strong>Conclusión de los autores:</strong> "+esc(rec.concl)+"</p>":"<p class='empty'>Sin resumen disponible.</p>")+
+    (rec.abs?"<details><summary>Ver resumen completo</summary><p class='concl' style='white-space:pre-line'>"+esc(rec.abs)+"</p></details>":"")+
+    "<div class='actions'><a href='"+esc(rec.url)+"' target='_blank' rel='noopener'>Abrir artículo</a>"+
+    "<button class='link' data-save='"+esc(rec.key)+"'>"+(isSaved?"Quitar de guardados":"Guardar")+"</button></div>"+
+    "</article>";
+}
+
+function toggleSave(key){
+  const i = state.saved.findIndex(s=>s.key===key);
+  if (i>=0) state.saved.splice(i,1);
+  else { const rec=cache.get(key); if(rec){ const {abs,...light}=rec; state.saved.unshift({...light, savedAt:new Date().toISOString().slice(0,10)}); } }
+  storeSaved();
+  document.querySelectorAll("[data-save='"+CSS.escape(key)+"']").forEach(b=>b.textContent = state.saved.some(s=>s.key===key)?"Quitar de guardados":"Guardar");
+  if (!$("#view-guardados").hidden) renderSaved();
+}
+function renderSaved(){
+  const el=$("#saved");
+  if (!state.saved.length){ el.innerHTML="<p class='empty'>Aún no has guardado artículos.</p>"; return; }
+  state.saved.forEach(s=>cache.set(s.key,s));
+  el.innerHTML = state.saved.map(artHTML).join("");
+}
+function exportSaved(){
+  const txt = state.saved.map(s=>s.authors+" ("+s.year+"). "+s.title+" "+s.journal+"."+(s.doi?" doi:"+s.doi:"")+(s.pmid?" PMID: "+s.pmid:"")).join("\n");
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>{ $("#export").textContent="Copiado"; setTimeout(()=>$("#export").textContent="Copiar referencias guardadas",1500); }).catch(()=>{ $("#export").textContent="No se pudo copiar en este navegador"; });
+}
+
+// ---- Interfaz ----
+function init(){
+  loadSaved(); storeSaved();
+  const chips=$("#chips");
+  TECH.forEach(t=>{ const b=document.createElement("button"); b.className="chip"; b.type="button"; b.textContent=t.label; b.setAttribute("aria-pressed","false"); b.dataset.id=t.id;
+    b.onclick=()=>{ if(state.tech.has(t.id)){state.tech.delete(t.id);b.setAttribute("aria-pressed","false");}else{state.tech.add(t.id);b.setAttribute("aria-pressed","true");} };
+    chips.appendChild(b); });
+  $("#go").onclick=run;
+  $("#q").addEventListener("keydown",e=>{ if(e.key==="Enter") run(); });
+  $("#q").addEventListener("input",()=>{ $("#pii").style.display="none"; });
+  document.addEventListener("click",e=>{ const k=e.target.getAttribute&&e.target.getAttribute("data-save"); if(k) toggleSave(k);
+    const m=e.target.getAttribute&&e.target.getAttribute("data-more"); if(m){ document.querySelectorAll(".extra-"+m).forEach(a=>a.hidden=false); e.target.remove(); } });
+  renderRegions(); renderRecent(); initVoice();
+  $("#export").onclick=exportSaved;
+  const tabs={buscar:$("#tab-buscar"),guardados:$("#tab-guardados")};
+  Object.entries(tabs).forEach(([name,btn])=>btn.onclick=()=>{
+    Object.entries(tabs).forEach(([n,b])=>{ b.setAttribute("aria-selected", n===name?"true":"false"); $("#view-"+n).hidden = n!==name; });
+    if(name==="guardados") renderSaved();
+  });
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+init();
+</script>
+</body>
+</html>
