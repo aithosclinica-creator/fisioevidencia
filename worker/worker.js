@@ -5,7 +5,7 @@
 //   GEMINI_API_KEY     (Secret)  la clave gratuita de aistudio.google.com  <- opción por defecto
 //   ACCESS_CODE        (Secret)  un código que solo conozcas tú; la app lo pide una vez
 // Opcionales:
-//   GEMINI_MODEL       (Text)    modelo de Gemini; por defecto gemini-3.5-flash
+//   GEMINI_MODEL       (Text)    modelo de Gemini preferido; si falla se prueban otros gratuitos
 //   ANTHROPIC_API_KEY  (Secret)  si no hay clave de Gemini, se usa Claude (de pago)
 //
 // Se usa fetch directo porque el editor web de Cloudflare no permite instalar SDKs.
@@ -120,8 +120,30 @@ export default {
 
 function fail(message, status, detail) { const e = new Error(message); e.status = status; e.detail = detail; return e; }
 
+const GEMINI_FALLBACKS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function callGemini(env, userText) {
-  const model = env.GEMINI_MODEL || "gemini-3.5-flash";
+  const models = [...new Set([env.GEMINI_MODEL, ...GEMINI_FALLBACKS].filter(Boolean))];
+  const errors = [];
+  for (const model of models) {
+    // Hasta 3 intentos por modelo, esperando 1 s y 3 s entre ellos si Google está saturado.
+    for (const wait of [0, 1000, 3000]) {
+      if (wait) await sleep(wait);
+      const r = await geminiOnce(env, model, userText);
+      if (r.ok) return r.out;
+      errors.push(model + ": " + r.status);
+      if (r.fatal) throw r.fatal;
+      if (!r.retry) break;           // p. ej. 404: este modelo no existe, pasar al siguiente
+    }
+  }
+  const all429 = errors.every(e => e.endsWith(": 429"));
+  throw fail(all429
+    ? "Has llegado al límite gratuito de Gemini por ahora. Prueba en un minuto o mañana, o usa Copiar para Claude."
+    : "Gemini está saturado ahora mismo. Prueba en unos minutos o usa Copiar para Claude.", all429 ? 429 : 503, errors.join(", "));
+}
+
+async function geminiOnce(env, model, userText) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const base = { system_instruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: "user", parts: [{ text: userText }] }] };
   const send = (generationConfig) => fetch(url, {
@@ -131,17 +153,21 @@ async function callGemini(env, userText) {
   });
   // Formato estructurado documentado; si esta versión de la API no lo acepta, se pide JSON por instrucciones.
   let res = await send({ responseFormat: { text: { mimeType: "application/json", schema: SCHEMA } } });
-  if (res.status === 400) {
-    res = await send({ responseMimeType: "application/json" });
+  if (res.status === 400) res = await send({ responseMimeType: "application/json" });
+  if ([429, 500, 503, 504].includes(res.status)) return { ok: false, status: res.status, retry: true };
+  if (res.status === 404 || res.status === 403) return { ok: false, status: res.status, retry: false };
+  if (res.status === 400 || res.status === 401) {
+    const t = (await res.text()).slice(0, 300);
+    return { ok: false, status: res.status, fatal: fail("Gemini rechazó la petición (" + res.status + "). Revisa que GEMINI_API_KEY esté bien copiada.", 502, t) };
   }
-  if (res.status === 429) throw fail("Has llegado al límite gratuito de Gemini por ahora. Prueba en un minuto o mañana.", 429);
-  if (!res.ok) throw fail("Gemini respondió con un error (" + res.status + ")", 502, (await res.text()).slice(0, 300));
+  if (!res.ok) return { ok: false, status: res.status, retry: true };
   const data = await res.json();
   const cand = (data.candidates || [])[0];
-  if (!cand || !cand.content) throw fail("Gemini no ha podido resumir esta búsqueda", 422, JSON.stringify(data.promptFeedback || {}).slice(0, 200));
-  if (cand.finishReason === "MAX_TOKENS") throw fail("El resumen salió demasiado largo; prueba con menos artículos", 422);
+  if (!cand || !cand.content) return { ok: false, status: "sin respuesta", fatal: fail("Gemini no ha podido resumir esta búsqueda", 422) };
+  if (cand.finishReason === "MAX_TOKENS") return { ok: false, status: "MAX_TOKENS", fatal: fail("El resumen salió demasiado largo; prueba con menos artículos", 422) };
   const text = (cand.content.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join("");
-  return parseOut(text);
+  try { const out = parseOut(text); out.model = model; return { ok: true, out }; }
+  catch (e) { return { ok: false, status: "formato", retry: true }; }
 }
 
 function parseOut(text) {
