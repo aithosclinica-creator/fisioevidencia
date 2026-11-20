@@ -592,12 +592,16 @@ function renderHistory(d, txt){
   const T=norm(txt);
   const origin=c=>{ if(!c) return ""; const ok=T.includes(norm(c)); return "<div class='origin"+(ok?"":" bad")+"'>"+(ok?"Dicho en la consulta: «"+esc(c)+"»":"Revisar: esta frase no aparece literal en la transcripción («"+esc(c)+"»)")+"</div>"; };
   let html="<div class='card'><h2 style='margin-top:0'>Historia clínica (borrador)</h2><p class='meta'>Revisa y corrige cada apartado. Nada es definitivo hasta que tú lo validas.</p>";
-  (d.campos||[]).forEach(([k,label],i)=>{ const f=d[k]||{texto:"",cita:""};
-    html+="<div class='hfield'><label for='hf-"+i+"'>"+esc(label)+"</label><textarea id='hf-"+i+"' data-label='"+esc(label)+"' rows='"+(f.texto?2:1)+"' placeholder='No se mencionó'>"+esc(f.texto)+"</textarea>"+origin(f.cita)+"</div>"; });
-  if ((d.senales_mencionadas||[]).length) html+="<h3>Señales mencionadas para revisar</h3><ul>"+d.senales_mencionadas.map(x=>"<li>"+esc(x.texto)+origin(x.cita)+"</li>").join("")+"</ul><p class='meta'>Lista de lo dicho, no es un diagnóstico. La valoración es tuya.</p>";
+  let grp="";
+  (d.campos||[]).forEach(([k,label,group],i)=>{ const f=d[k]||{texto:"",cita:""};
+    if (group && group!==grp){ grp=group; html+="<h3>"+esc(group)+"</h3>"; }
+    html+="<div class='hfield'><div class='row' style='justify-content:space-between'><label for='hf-"+i+"' style='margin:0'>"+esc(label)+"</label><button class='link' type='button' data-hcopy='"+i+"'>Copiar</button></div><textarea id='hf-"+i+"' data-label='"+esc(label)+"' rows='"+(f.texto?2:1)+"' placeholder='No se mencionó'>"+esc(f.texto)+"</textarea>"+origin(f.cita)+"</div>"; });
+  html+="<p class='meta'>Red flags y yellow flags recogen solo lo dicho en la consulta; no son un diagnóstico. La valoración es tuya.</p>";
   if ((d.no_preguntado||[]).length) html+="<h3>No ha salido en la conversación</h3><ul>"+d.no_preguntado.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul>";
   html+="</div>";
   $("#h-out").innerHTML=html;
+  document.querySelectorAll("[data-hcopy]").forEach(b=>b.onclick=()=>{ const t=$("#hf-"+b.dataset.hcopy).value.trim();
+    (navigator.clipboard&&t?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{ b.textContent="Copiado"; setTimeout(()=>b.textContent="Copiar",1200); }).catch(()=>{ b.textContent=t?"No se pudo":"Vacío"; setTimeout(()=>b.textContent="Copiar",1200); }); });
 }
 const HTOOLS=["Ecografía","EPI (electrólisis percutánea)","Neuromodulación percutánea","Punción seca","Radiofrecuencia / diatermia","Ejercicio terapéutico","Terapia manual"];
 const HTOOL2TECH={"EPI (electrólisis percutánea)":"epi","Neuromodulación percutánea":"pens","Punción seca":"dn","Radiofrecuencia / diatermia":"rf","Ecografía":"eco","Ejercicio terapéutico":"ex","Terapia manual":"tm"};

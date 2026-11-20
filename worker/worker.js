@@ -102,39 +102,56 @@ const SUMMARY_TASK = {
 };
 
 // ---- Historia clínica a partir de la conversación (PROTOTIPO: solo pacientes ficticios) ----
+// Mismo orden y nombres que la plantilla de historia clínica de la clínica (Clinic Cloud).
 const HISTORY_FIELDS = [
-  ["motivo_consulta", "Motivo de consulta"],
-  ["inicio_evolucion", "Inicio y evolución (cuándo, cómo empezó, mecanismo, curso)"],
-  ["localizacion_irradiacion", "Localización e irradiación del dolor o síntoma"],
-  ["caracteristicas_dolor", "Tipo de dolor, intensidad (EVA/NPRS si se dice) y comportamiento en 24 h"],
-  ["agravantes_aliviantes", "Qué lo empeora y qué lo alivia"],
-  ["funcion_limitaciones", "Limitaciones funcionales y actividades afectadas"],
-  ["actividad_trabajo", "Actividad física, deporte y trabajo"],
-  ["antecedentes", "Antecedentes médicos, lesiones y cirugías previas"],
-  ["medicacion", "Medicación actual"],
-  ["pruebas_previas", "Pruebas de imagen u otras pruebas y tratamientos previos"],
-  ["factores_psicosociales", "Creencias, miedo al movimiento, estrés, sueño, expectativas"],
-  ["objetivos_paciente", "Objetivos y expectativas del paciente"],
+  ["antecedentes_personales", "¿Antecedentes personales?", "Historia clínica"],
+  ["motivo_consulta", "Motivo de consulta", "Historia clínica"],
+  ["presente_desde", "¿Presente desde?", "Historia clínica"],
+  ["comenzaron_por", "¿Comenzaron por?", "Historia clínica"],
+  ["eva", "EVA 0/10", "Historia clínica"],
+  ["tipo_dolor", "¿Tipo de dolor?", "Historia clínica"],
+  ["sueno", "¿Sueño?", "Historia clínica"],
+  ["yellow_flags", "Yellow flags", "Historia clínica"],
+  ["red_flags", "Red flags", "Historia clínica"],
+  ["practica_deporte", "¿Practica deporte?", "Historia clínica"],
+  ["valoracion_mecanica", "¿Valoración mecánica?", "Historia clínica"],
+  ["movimiento_preferencia", "¿Movimiento de preferencia?", "Historia clínica"],
+  ["alergias", "Alergias", "Datos del paciente"],
+  ["enfermedades", "Enfermedades", "Datos del paciente"],
+  ["medicacion", "Medicación", "Datos del paciente"],
+  ["habitos", "Hábitos", "Datos del paciente"],
+  ["embarazada", "Embarazada", "Datos del paciente"],
+  ["antecedentes_familiares", "Antecedentes familiares", "Historial médico"],
+  ["antecedentes_quirurgicos", "Antecedentes quirúrgicos", "Historial médico"],
+  ["peso_altura", "Peso y altura", "Datos biométricos"],
 ];
-const HISTORY_SYSTEM = `Eres un asistente de documentación para fisioterapeutas. Recibes la transcripción de una entrevista clínica (fisioterapeuta y paciente, sin etiquetas de quién habla) y redactas la anamnesis estructurada.
+const FIELD_HINTS = {
+  eva: "solo el número de 0 a 10 que diga el paciente y, si lo dice, en qué situación",
+  practica_deporte: "Sí o No y, si lo dice, qué deporte, frecuencia y nivel",
+  yellow_flags: "solo factores psicosociales dichos: miedo al movimiento, catastrofismo, estrés, ansiedad, baja laboral, expectativas negativas",
+  red_flags: "solo síntomas dichos que suelen revisarse como banderas rojas (dolor nocturno que no cambia con la postura, pérdida de peso sin explicación, fiebre, alteraciones de esfínteres, anestesia en silla de montar, déficit neurológico progresivo, antecedentes de cáncer, traumatismo importante). Nunca concluyas ni interpretes",
+  valoracion_mecanica: "solo hallazgos de la exploración que el fisioterapeuta diga en voz alta (movimientos que reproducen el dolor, rangos, tests)",
+  movimiento_preferencia: "movimiento o postura que alivia, si se dice",
+  embarazada: "solo si se menciona",
+};
+const HISTORY_SYSTEM = `Eres un asistente de documentación para fisioterapeutas. Recibes la transcripción de una entrevista clínica (fisioterapeuta y paciente, sin etiquetas de quién habla) y rellenas los apartados de la historia clínica de la clínica.
 
 Reglas estrictas:
-- Usa SOLO lo que se dice en la transcripción. No inventes, no supongas y no completes con datos típicos. Si un apartado no se menciona, déjalo vacío.
+- Usa SOLO lo que se dice en la transcripción. No inventes, no supongas y no completes con datos típicos. Si un apartado no se menciona, deja texto y cita vacíos.
 - Para cada apartado con contenido, copia en "cita" la frase literal de la transcripción de la que sale (la más representativa).
 - No hagas diagnósticos, no propongas pruebas ni tratamientos. Solo documentas lo que se ha dicho.
-- "senales_mencionadas": lista los síntomas que se han dicho en la conversación y que suelen revisarse como posibles banderas rojas (dolor nocturno que no cambia con la postura, pérdida de peso sin explicación, fiebre, alteraciones de esfínteres, anestesia en silla de montar, déficit neurológico progresivo, antecedentes de cáncer, traumatismo importante...). Solo si se han dicho; nunca interpretes ni concluyas.
-- "no_preguntado": lista breve de apartados de una anamnesis musculoesquelética estándar que no aparecen en la transcripción, para que el fisioterapeuta decida si preguntarlos.
+- Apartados y qué va en cada uno: ${HISTORY_FIELDS.map(([k, l]) => `${k} (${l})${FIELD_HINTS[k] ? ": " + FIELD_HINTS[k] : ""}`).join("; ")}.
+- "no_preguntado": lista breve de apartados de la plantilla que no aparecen en la transcripción, para que el fisioterapeuta decida si preguntarlos.
 - Escribe en español, en tercera persona y con estilo de historia clínica, frases cortas.
-- Responde SOLO con un objeto JSON con los campos: ${HISTORY_FIELDS.map(f => f[0]).join(", ")} (cada uno {texto, cita}), senales_mencionadas (lista de {texto, cita}), no_preguntado (lista de textos).`;
+- Responde SOLO con un objeto JSON con los campos: ${HISTORY_FIELDS.map(f => f[0]).join(", ")} (cada uno {texto, cita}) y no_preguntado (lista de textos).`;
 const fieldSchema = { type: "object", properties: { texto: { type: "string" }, cita: { type: "string" } }, required: ["texto", "cita"], additionalProperties: false };
 const HISTORY_SCHEMA = {
   type: "object",
   properties: {
     ...Object.fromEntries(HISTORY_FIELDS.map(([k, d]) => [k, { ...fieldSchema, description: d }])),
-    senales_mencionadas: { type: "array", items: fieldSchema },
     no_preguntado: { type: "array", items: { type: "string" } },
   },
-  required: [...HISTORY_FIELDS.map(f => f[0]), "senales_mencionadas", "no_preguntado"],
+  required: [...HISTORY_FIELDS.map(f => f[0]), "no_preguntado"],
   additionalProperties: false,
 };
 const HISTORY_TASK = {
@@ -145,7 +162,6 @@ const HISTORY_TASK = {
       const v = out[k];
       out[k] = v && typeof v === "object" ? { texto: String(v.texto || ""), cita: String(v.cita || "") } : { texto: typeof v === "string" ? v : "", cita: "" };
     }
-    out.senales_mencionadas = Array.isArray(out.senales_mencionadas) ? out.senales_mencionadas : [];
     out.no_preguntado = Array.isArray(out.no_preguntado) ? out.no_preguntado.map(String) : [];
     return out;
   },
