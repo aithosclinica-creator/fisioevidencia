@@ -72,6 +72,10 @@ textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line)
 .origin{font-size:.8rem;color:var(--muted);margin-top:2px}
 .origin.bad{color:var(--warn-ink)}
 .tabs button{font-size:.9rem}
+.pmlist{list-style:none;padding:0;margin:8px 0 0}
+.pmlist li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+.pmlist .dot{width:12px;height:12px;border-radius:50%;flex:0 0 12px}
+.pmlist button{margin-left:auto}
 .rank{padding-left:22px;margin:6px 0}.rank li{margin-bottom:8px}
 .ref{color:var(--brand);font-weight:600;text-decoration:none;font-size:.85rem}
 .pill{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:6px;border:1px solid currentColor;margin-left:4px;color:var(--muted)}
@@ -143,7 +147,35 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
       </div>
       <p class="meta" id="h-msg"></p>
     </div>
+    <div class="card">
+      <h2 style="margin-top:0">Mapa de dolor</h2>
+      <p class="meta">Gira el cuerpo arrastrando y toca donde duele. Maniquí simplificado, no anatómico.</p>
+      <div class="row">
+        <label for="pm-type" style="margin:0">Tipo</label>
+        <select id="pm-type"><option>Dolor local</option><option>Dolor irradiado</option><option>Hormigueo o parestesia</option><option>Rigidez</option><option>Debilidad</option></select>
+        <label for="pm-eva" style="margin:0">EVA <span id="pm-evav">5</span></label>
+        <input type="range" id="pm-eva" min="0" max="10" value="5" style="flex:1;min-width:120px">
+      </div>
+      <div id="pm-wrap" style="position:relative;margin-top:8px">
+        <canvas id="pm-canvas" style="width:100%;height:380px;display:block;touch-action:none;border-radius:10px;background:var(--bg)"></canvas>
+        <p class="meta" id="pm-load" style="position:absolute;top:45%;width:100%;text-align:center">Cargando el modelo 3D…</p>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="link" id="pm-front" type="button">Ver de frente</button><button class="link" id="pm-back" type="button">Ver de espaldas</button><button class="link" id="pm-undo" type="button">Quitar el último punto</button></div>
+      <ul id="pm-list" class="pmlist"></ul>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Patología y herramientas</h2>
+      <label for="h-path">Patología o diagnóstico de fisioterapia</label>
+      <input type="text" id="h-path" list="h-pathlist" placeholder="Ej.: tendinopatía rotuliana" autocomplete="off">
+      <datalist id="h-pathlist"></datalist>
+      <label style="margin-top:12px">Herramientas utilizadas</label>
+      <div class="chips" id="h-tools"></div>
+      <label for="h-tooltxt">Otras herramientas, parámetros o notas</label>
+      <textarea id="h-tooltxt" rows="2" placeholder="Ej.: EPI ecoguiada 3 mA × 3 s × 3; excéntricos 3×15"></textarea>
+      <div class="row" style="margin-top:8px"><button class="link" id="h-evid" type="button">Ver la evidencia de esta patología y herramientas</button></div>
+    </div>
     <div id="h-out"></div>
+    <div class="row" style="margin-bottom:16px"><button class="primary" id="h-copyall" type="button">Copiar historia completa</button><span class="meta" id="h-copymsg"></span></div>
   </section>
 
   <section id="view-guardados" hidden>
@@ -564,10 +596,117 @@ function renderHistory(d, txt){
     html+="<div class='hfield'><label for='hf-"+i+"'>"+esc(label)+"</label><textarea id='hf-"+i+"' data-label='"+esc(label)+"' rows='"+(f.texto?2:1)+"' placeholder='No se mencionó'>"+esc(f.texto)+"</textarea>"+origin(f.cita)+"</div>"; });
   if ((d.senales_mencionadas||[]).length) html+="<h3>Señales mencionadas para revisar</h3><ul>"+d.senales_mencionadas.map(x=>"<li>"+esc(x.texto)+origin(x.cita)+"</li>").join("")+"</ul><p class='meta'>Lista de lo dicho, no es un diagnóstico. La valoración es tuya.</p>";
   if ((d.no_preguntado||[]).length) html+="<h3>No ha salido en la conversación</h3><ul>"+d.no_preguntado.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul>";
-  html+="<div class='row'><button class='primary' id='h-copy' type='button'>Copiar historia</button><span class='meta' id='h-copymsg'></span></div></div>";
+  html+="</div>";
   $("#h-out").innerHTML=html;
-  $("#h-copy").onclick=()=>{ const t="HISTORIA CLÍNICA (paciente ficticio)\n\n"+[...document.querySelectorAll("#h-out textarea")].filter(a=>a.value.trim()).map(a=>a.dataset.label+":\n"+a.value.trim()).join("\n\n");
-    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>$("#h-copymsg").textContent="Copiada").catch(()=>$("#h-copymsg").textContent="No se pudo copiar en este navegador"); };
+}
+const HTOOLS=["Ecografía","EPI (electrólisis percutánea)","Neuromodulación percutánea","Punción seca","Radiofrecuencia / diatermia","Ejercicio terapéutico","Terapia manual"];
+const HTOOL2TECH={"EPI (electrólisis percutánea)":"epi","Neuromodulación percutánea":"pens","Punción seca":"dn","Radiofrecuencia / diatermia":"rf","Ecografía":"eco","Ejercicio terapéutico":"ex","Terapia manual":"tm"};
+function initPathTools(){
+  const dl=$("#h-pathlist"); [...new Set(Object.values(REGIONS).flat())].forEach(p=>{ const o=document.createElement("option"); o.value=p==="lca"?"LCA":p.charAt(0).toUpperCase()+p.slice(1); dl.appendChild(o); });
+  const box=$("#h-tools"); HTOOLS.forEach(t=>{ const b=document.createElement("button"); b.type="button"; b.className="chip"; b.textContent=t; b.setAttribute("aria-pressed","false");
+    b.onclick=()=>b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true"); box.appendChild(b); });
+  $("#h-evid").onclick=()=>{ const path=$("#h-path").value.trim(); if(!path){ $("#h-path").focus(); return; }
+    const sel=[...document.querySelectorAll("#h-tools .chip[aria-pressed=true]")].map(b=>HTOOL2TECH[b.textContent]).filter(Boolean);
+    $("#q").value=path; setTech(sel); $("#tab-buscar").click(); run(); };
+  $("#h-copyall").onclick=copyAll;
+}
+function selectedTools(){ return [...document.querySelectorAll("#h-tools .chip[aria-pressed=true]")].map(b=>b.textContent); }
+function copyAll(){
+  const parts=["HISTORIA CLÍNICA (paciente ficticio)"];
+  const path=$("#h-path").value.trim(); if(path) parts.push("Patología / diagnóstico de fisioterapia:\n"+path);
+  [...document.querySelectorAll("#h-out textarea")].filter(a=>a.value.trim()).forEach(a=>parts.push(a.dataset.label+":\n"+a.value.trim()));
+  if (PM.points.length) parts.push("Mapa de dolor:\n"+PM.points.map(p=>"- "+p.region+": "+p.type.toLowerCase()+", EVA "+p.eva).join("\n"));
+  const tools=selectedTools(), extra=$("#h-tooltxt").value.trim();
+  if (tools.length||extra) parts.push("Herramientas utilizadas:\n"+[tools.join(", "), extra].filter(Boolean).join("\n"));
+  const t=parts.join("\n\n"), m=$("#h-copymsg");
+  if (parts.length===1){ m.textContent="Todavía no hay nada que copiar."; return; }
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>m.textContent="Copiada").catch(()=>m.textContent="No se pudo copiar en este navegador");
+}
+
+// ---- Mapa de dolor 3D (Three.js, maniquí de formas simples) ----
+const PM={points:[], started:false};
+function loadThree(){ return new Promise((ok,ko)=>{ if(window.THREE) return ok(); const sc=document.createElement("script"); sc.src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"; sc.onload=ok; sc.onerror=()=>ko(new Error("no se pudo cargar")); document.head.appendChild(sc); }); }
+function evaColor(e){ const h=120-(e/10)*120; return "hsl("+h+",80%,45%)"; }
+function regionName(part, lp){
+  const ant = lp.z >= 0, mid = Math.abs(lp.x)<0.035, right = lp.x<0;
+  const m = mid ? "" : (right?" derecho":" izquierdo"), f = mid ? "" : (right?" derecha":" izquierda");
+  const lado = mid ? "" : (right?" (lado derecho)":" (lado izquierdo)");
+  const cara = ant ? " (cara anterior)" : " (cara posterior)";
+  switch(part){
+    case "cabeza": return ant ? "Cara" : "Cabeza (zona occipital)";
+    case "cuello": return ant ? "Cuello (cara anterior)" : "Zona cervical"+lado;
+    case "torax": return ant ? "Tórax"+lado : "Zona dorsal"+lado;
+    case "abdomen": return ant ? "Abdomen"+lado : "Zona lumbar"+lado;
+    case "pelvis": return ant ? "Ingle"+lado : (mid ? "Sacro" : "Glúteo"+m);
+    case "hombro": return "Hombro"+m+cara;
+    case "brazo": return "Brazo"+m+cara;
+    case "codo": return "Codo"+m+cara;
+    case "antebrazo": return "Antebrazo"+m+cara;
+    case "mano": return "Muñeca o mano"+f;
+    case "muslo": return "Muslo"+m+cara;
+    case "rodilla": return "Rodilla"+f+cara;
+    case "pierna": return ant ? "Pierna"+f+cara : "Gemelo"+m;
+    case "pie": return "Tobillo o pie"+m;
+  }
+  return part;
+}
+async function initPainMap(){
+  if (PM.started) return; PM.started=true;
+  $("#pm-eva").oninput=()=>$("#pm-evav").textContent=$("#pm-eva").value;
+  try{ await loadThree(); }catch(e){ $("#pm-load").textContent="No se pudo cargar el modelo 3D. Comprueba la conexión."; return; }
+  $("#pm-load").hidden=true;
+  const T=window.THREE, canvas=$("#pm-canvas");
+  const renderer=new T.WebGLRenderer({canvas, antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  const scene=new T.Scene(), camera=new T.PerspectiveCamera(32,1,0.1,20);
+  camera.position.set(0,0.92,3.5); camera.lookAt(0,0.9,0);
+  scene.add(new T.HemisphereLight(0xffffff,0x667777,0.9)); const dl=new T.DirectionalLight(0xffffff,0.6); dl.position.set(1,2,3); scene.add(dl);
+  const dl2=new T.DirectionalLight(0xffffff,0.35); dl2.position.set(-1,1,-3); scene.add(dl2);
+  const body=new T.Group(); scene.add(body);
+  const mat=new T.MeshStandardMaterial({color:0xc8d2d0, roughness:0.75});
+  const parts=[];
+  const add=(mesh,name)=>{ mesh.userData.part=name; body.add(mesh); parts.push(mesh); return mesh; };
+  const sphere=(r,x,y,z,name,sx=1,sy=1,sz=1)=>{ const m=add(new T.Mesh(new T.SphereGeometry(r,24,16),mat),name); m.position.set(x,y,z); m.scale.set(sx,sy,sz); return m; };
+  const limb=(r1,r2,a,b,name)=>{ const A=new T.Vector3(...a), B=new T.Vector3(...b), len=A.distanceTo(B);
+    const m=add(new T.Mesh(new T.CylinderGeometry(r1,r2,len,20),mat),name); m.position.copy(A).add(B).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0), B.clone().sub(A).normalize()); sphere(r2,B.x,B.y,B.z,name); return m; };
+  sphere(0.11,0,1.7,0,"cabeza",0.9,1.1,1);
+  limb(0.05,0.055,[0,1.6,0],[0,1.5,0],"cuello");
+  sphere(0.2,0,1.33,0,"torax",1,1.05,0.62);
+  sphere(0.17,0,1.08,0,"abdomen",1,0.9,0.62);
+  sphere(0.18,0,0.92,0,"pelvis",1,0.6,0.65);
+  for (const sx of [-1,1]){
+    sphere(0.07,0.21*sx,1.47,0,"hombro");
+    limb(0.055,0.048,[0.23*sx,1.44,0],[0.26*sx,1.15,0],"brazo");
+    sphere(0.05,0.26*sx,1.14,0,"codo");
+    limb(0.045,0.035,[0.265*sx,1.12,0],[0.285*sx,0.88,0.02],"antebrazo");
+    sphere(0.05,0.29*sx,0.8,0.02,"mano",0.7,1.4,0.5);
+    limb(0.085,0.065,[0.1*sx,0.9,0],[0.1*sx,0.52,0],"muslo");
+    sphere(0.068,0.1*sx,0.5,0.005,"rodilla");
+    limb(0.06,0.045,[0.1*sx,0.47,0],[0.1*sx,0.09,0],"pierna");
+    const f=add(new T.Mesh(new T.BoxGeometry(0.09,0.06,0.24),mat),"pie"); f.position.set(0.1*sx,0.04,0.05);
+  }
+  const resize=()=>{ const w=canvas.clientWidth, h=canvas.clientHeight; if(!w) return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); };
+  let target=0;
+  const draw=()=>{ body.rotation.y += (target-body.rotation.y)*0.2; renderer.render(scene,camera); requestAnimationFrame(draw); };
+  resize(); window.addEventListener("resize",resize); draw();
+  const ray=new T.Raycaster(), v=new T.Vector2(); let down=null, moved=0;
+  canvas.addEventListener("pointerdown",e=>{ down={x:e.clientX, r:target}; moved=0; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove",e=>{ if(!down) return; const dx=e.clientX-down.x; moved=Math.max(moved,Math.abs(dx)); target=down.r+dx*0.012; });
+  canvas.addEventListener("pointerup",e=>{ if(!down) return; const wasTap=moved<6; down=null; if(!wasTap) return;
+    const r=canvas.getBoundingClientRect(); v.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+    ray.setFromCamera(v,camera); const hit=ray.intersectObjects(parts,false)[0]; if(!hit) return;
+    const lp=body.worldToLocal(hit.point.clone()), eva=+$("#pm-eva").value, type=$("#pm-type").value;
+    const mk=new T.Mesh(new T.SphereGeometry(0.03,16,12), new T.MeshBasicMaterial({color:new T.Color(evaColor(eva))}));
+    mk.position.copy(lp); body.add(mk);
+    PM.points.push({region:regionName(hit.object.userData.part, lp), type, eva, mesh:mk}); renderPainList(); });
+  $("#pm-front").onclick=()=>{ target=0; }; $("#pm-back").onclick=()=>{ target=Math.PI; };
+  $("#pm-undo").onclick=()=>{ const p=PM.points.pop(); if(p) body.remove(p.mesh); renderPainList(); };
+  PM.remove=i=>{ const p=PM.points.splice(i,1)[0]; if(p) body.remove(p.mesh); renderPainList(); };
+}
+function renderPainList(){
+  $("#pm-list").innerHTML = PM.points.map((p,i)=>"<li><span class='dot' style='background:"+evaColor(p.eva)+"'></span>"+esc(p.region)+" · "+esc(p.type.toLowerCase())+" · EVA "+p.eva+"<button class='link' type='button' data-pmdel='"+i+"'>Quitar</button></li>").join("");
+  document.querySelectorAll("[data-pmdel]").forEach(b=>b.onclick=()=>PM.remove(+b.dataset.pmdel));
 }
 
 // ---- Interfaz ----
@@ -583,12 +722,13 @@ function init(){
   document.addEventListener("click",e=>{ const k=e.target.getAttribute&&e.target.getAttribute("data-save"); if(k) toggleSave(k);
     const rf=e.target.getAttribute&&e.target.getAttribute("data-ref"); if(rf){ e.preventDefault(); const art=document.getElementById("art-"+rf); if(art){ art.hidden=false; art.scrollIntoView({behavior:"smooth",block:"center"}); art.style.outline="2px solid var(--brand)"; setTimeout(()=>art.style.outline="",1500); } }
     const m=e.target.getAttribute&&e.target.getAttribute("data-more"); if(m){ document.querySelectorAll(".extra-"+m).forEach(a=>a.hidden=false); e.target.remove(); } });
-  renderRegions(); renderRecent(); initVoice(); initSettings(); initHistory();
+  renderRegions(); renderRecent(); initVoice(); initSettings(); initHistory(); initPathTools();
   $("#export").onclick=exportSaved;
   const tabs={buscar:$("#tab-buscar"),guardados:$("#tab-guardados"),consulta:$("#tab-consulta")};
   Object.entries(tabs).forEach(([name,btn])=>btn.onclick=()=>{
     Object.entries(tabs).forEach(([n,b])=>{ b.setAttribute("aria-selected", n===name?"true":"false"); $("#view-"+n).hidden = n!==name; });
     if(name==="guardados") renderSaved();
+    if(name==="consulta") initPainMap();
   });
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
