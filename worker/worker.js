@@ -90,6 +90,82 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
+const SUMMARY_TASK = {
+  system: SYSTEM,
+  schema: SCHEMA,
+  normalize(out) {
+    out.hallazgos = Array.isArray(out.hallazgos) ? out.hallazgos : [];
+    out.tecnicas = Array.isArray(out.tecnicas) ? out.tecnicas : [];
+    out.ranking = Array.isArray(out.ranking) ? out.ranking.slice(0, 3) : [];
+    return out;
+  },
+};
+
+// ---- Historia clínica a partir de la conversación (PROTOTIPO: solo pacientes ficticios) ----
+const HISTORY_FIELDS = [
+  ["motivo_consulta", "Motivo de consulta"],
+  ["inicio_evolucion", "Inicio y evolución (cuándo, cómo empezó, mecanismo, curso)"],
+  ["localizacion_irradiacion", "Localización e irradiación del dolor o síntoma"],
+  ["caracteristicas_dolor", "Tipo de dolor, intensidad (EVA/NPRS si se dice) y comportamiento en 24 h"],
+  ["agravantes_aliviantes", "Qué lo empeora y qué lo alivia"],
+  ["funcion_limitaciones", "Limitaciones funcionales y actividades afectadas"],
+  ["actividad_trabajo", "Actividad física, deporte y trabajo"],
+  ["antecedentes", "Antecedentes médicos, lesiones y cirugías previas"],
+  ["medicacion", "Medicación actual"],
+  ["pruebas_previas", "Pruebas de imagen u otras pruebas y tratamientos previos"],
+  ["factores_psicosociales", "Creencias, miedo al movimiento, estrés, sueño, expectativas"],
+  ["objetivos_paciente", "Objetivos y expectativas del paciente"],
+];
+const HISTORY_SYSTEM = `Eres un asistente de documentación para fisioterapeutas. Recibes la transcripción de una entrevista clínica (fisioterapeuta y paciente, sin etiquetas de quién habla) y redactas la anamnesis estructurada.
+
+Reglas estrictas:
+- Usa SOLO lo que se dice en la transcripción. No inventes, no supongas y no completes con datos típicos. Si un apartado no se menciona, déjalo vacío.
+- Para cada apartado con contenido, copia en "cita" la frase literal de la transcripción de la que sale (la más representativa).
+- No hagas diagnósticos, no propongas pruebas ni tratamientos. Solo documentas lo que se ha dicho.
+- "senales_mencionadas": lista los síntomas que se han dicho en la conversación y que suelen revisarse como posibles banderas rojas (dolor nocturno que no cambia con la postura, pérdida de peso sin explicación, fiebre, alteraciones de esfínteres, anestesia en silla de montar, déficit neurológico progresivo, antecedentes de cáncer, traumatismo importante...). Solo si se han dicho; nunca interpretes ni concluyas.
+- "no_preguntado": lista breve de apartados de una anamnesis musculoesquelética estándar que no aparecen en la transcripción, para que el fisioterapeuta decida si preguntarlos.
+- Escribe en español, en tercera persona y con estilo de historia clínica, frases cortas.
+- Responde SOLO con un objeto JSON con los campos: ${HISTORY_FIELDS.map(f => f[0]).join(", ")} (cada uno {texto, cita}), senales_mencionadas (lista de {texto, cita}), no_preguntado (lista de textos).`;
+const fieldSchema = { type: "object", properties: { texto: { type: "string" }, cita: { type: "string" } }, required: ["texto", "cita"], additionalProperties: false };
+const HISTORY_SCHEMA = {
+  type: "object",
+  properties: {
+    ...Object.fromEntries(HISTORY_FIELDS.map(([k, d]) => [k, { ...fieldSchema, description: d }])),
+    senales_mencionadas: { type: "array", items: fieldSchema },
+    no_preguntado: { type: "array", items: { type: "string" } },
+  },
+  required: [...HISTORY_FIELDS.map(f => f[0]), "senales_mencionadas", "no_preguntado"],
+  additionalProperties: false,
+};
+const HISTORY_TASK = {
+  system: HISTORY_SYSTEM,
+  schema: HISTORY_SCHEMA,
+  normalize(out) {
+    for (const [k] of HISTORY_FIELDS) {
+      const v = out[k];
+      out[k] = v && typeof v === "object" ? { texto: String(v.texto || ""), cita: String(v.cita || "") } : { texto: typeof v === "string" ? v : "", cita: "" };
+    }
+    out.senales_mencionadas = Array.isArray(out.senales_mencionadas) ? out.senales_mencionadas : [];
+    out.no_preguntado = Array.isArray(out.no_preguntado) ? out.no_preguntado.map(String) : [];
+    return out;
+  },
+};
+
+async function handleHistory(body, env, origin) {
+  if (body.ficticio !== true) return json({ error: "Este prototipo solo admite pacientes ficticios" }, 400, origin);
+  const transcript = String(body.transcript || "").slice(0, 20000);
+  if (transcript.trim().length < 40) return json({ error: "La transcripción es demasiado corta" }, 400, origin);
+  if (hasPII(transcript)) return json({ error: "La transcripción parece contener datos identificativos (DNI, teléfono o email). Quítalos." }, 400, origin);
+  try {
+    const out = env.GEMINI_API_KEY ? await callGemini(env, "Transcripción de la entrevista:\n\n" + transcript, HISTORY_TASK)
+                                   : await callClaude(env, "Transcripción de la entrevista:\n\n" + transcript, HISTORY_TASK);
+    out.campos = HISTORY_FIELDS;
+    return json(out, 200, origin);
+  } catch (e) {
+    return json({ error: e.message, detail: e.detail }, e.status || 502, origin);
+  }
+}
+
 function cors(origin) {
   const ok = ALLOWED_ORIGINS.includes(origin);
   return {
@@ -117,6 +193,7 @@ export default {
 
     let body;
     try { body = await request.json(); } catch { return json({ error: "Petición no válida" }, 400, origin); }
+    if (new URL(request.url).pathname.replace(/\/+$/, "") === "/historia") return handleHistory(body, env, origin);
     const question = String(body.question || "").slice(0, 300);
     const articles = Array.isArray(body.articles) ? body.articles.slice(0, MAX_ARTICLES) : [];
     if (!question || !articles.length) return json({ error: "Faltan la pregunta o los artículos" }, 400, origin);
@@ -129,7 +206,7 @@ export default {
     const userText = `Pregunta del fisioterapeuta: ${question}\n\nArtículos recuperados (${articles.length}):\n\n${list}`;
     let out;
     try {
-      out = env.GEMINI_API_KEY ? await callGemini(env, userText) : await callClaude(env, userText);
+      out = env.GEMINI_API_KEY ? await callGemini(env, userText, SUMMARY_TASK) : await callClaude(env, userText, SUMMARY_TASK);
     } catch (e) {
       return json({ error: e.message, detail: e.detail }, e.status || 502, origin);
     }
@@ -143,14 +220,14 @@ function fail(message, status, detail) { const e = new Error(message); e.status 
 const GEMINI_FALLBACKS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function callGemini(env, userText) {
+async function callGemini(env, userText, task) {
   const models = [...new Set([env.GEMINI_MODEL, ...GEMINI_FALLBACKS].filter(Boolean))];
   const errors = [];
   for (const model of models) {
     // Hasta 3 intentos por modelo, esperando 1 s y 3 s entre ellos si Google está saturado.
     for (const wait of [0, 1000, 3000]) {
       if (wait) await sleep(wait);
-      const r = await geminiOnce(env, model, userText);
+      const r = await geminiOnce(env, model, userText, task);
       if (r.ok) return r.out;
       errors.push(model + ": " + r.status);
       if (r.fatal) throw r.fatal;
@@ -163,16 +240,16 @@ async function callGemini(env, userText) {
     : "Gemini está saturado ahora mismo. Prueba en unos minutos o usa Copiar para Claude.", all429 ? 429 : 503, errors.join(", "));
 }
 
-async function geminiOnce(env, model, userText) {
+async function geminiOnce(env, model, userText, task) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const base = { system_instruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: "user", parts: [{ text: userText }] }] };
+  const base = { system_instruction: { parts: [{ text: task.system }] }, contents: [{ role: "user", parts: [{ text: userText }] }] };
   const send = (generationConfig) => fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
     body: JSON.stringify({ ...base, generationConfig }),
   });
   // Formato estructurado documentado; si esta versión de la API no lo acepta, se pide JSON por instrucciones.
-  let res = await send({ responseFormat: { text: { mimeType: "application/json", schema: SCHEMA } } });
+  let res = await send({ responseFormat: { text: { mimeType: "application/json", schema: task.schema } } });
   if (res.status === 400) res = await send({ responseMimeType: "application/json" });
   if ([429, 500, 503, 504].includes(res.status)) return { ok: false, status: res.status, retry: true };
   if (res.status === 404 || res.status === 403) return { ok: false, status: res.status, retry: false };
@@ -186,7 +263,7 @@ async function geminiOnce(env, model, userText) {
   if (!cand || !cand.content) return { ok: false, status: "sin respuesta", fatal: fail("Gemini no ha podido resumir esta búsqueda", 422) };
   if (cand.finishReason === "MAX_TOKENS") return { ok: false, status: "MAX_TOKENS", fatal: fail("El resumen salió demasiado largo; prueba con menos artículos", 422) };
   const text = (cand.content.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join("");
-  try { const out = parseOut(text); out.model = model; return { ok: true, out }; }
+  try { const out = task.normalize(parseOut(text)); out.model = model; return { ok: true, out }; }
   catch (e) { return { ok: false, status: "formato", retry: true }; }
 }
 
@@ -195,13 +272,10 @@ function parseOut(text) {
   let out;
   try { out = JSON.parse(t); } catch { throw fail("La respuesta de la IA no tenía el formato esperado", 502); }
   if (typeof out !== "object" || !out) throw fail("La respuesta de la IA no tenía el formato esperado", 502);
-  out.hallazgos = Array.isArray(out.hallazgos) ? out.hallazgos : [];
-  out.tecnicas = Array.isArray(out.tecnicas) ? out.tecnicas : [];
-  out.ranking = Array.isArray(out.ranking) ? out.ranking.slice(0, 3) : [];
   return out;
 }
 
-async function callClaude(env, userText) {
+async function callClaude(env, userText, task) {
   if (!env.ANTHROPIC_API_KEY) throw fail("Falta la clave de la IA en Cloudflare (GEMINI_API_KEY)", 500);
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -215,8 +289,8 @@ async function callClaude(env, userText) {
         model: "claude-opus-5-5",
         max_tokens: 16000,
         fallbacks: "default",
-        output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
-        system: SYSTEM,
+        output_config: { effort: "medium", format: { type: "json_schema", schema: task.schema } },
+        system: task.system,
         messages: [{ role: "user", content: userText }],
       }),
     });
@@ -224,5 +298,5 @@ async function callClaude(env, userText) {
     const msg = await res.json();
     if (msg.stop_reason === "refusal") throw fail("La IA no ha podido resumir esta búsqueda", 422);
     if (msg.stop_reason === "max_tokens") throw fail("El resumen salió demasiado largo; prueba con menos artículos", 422);
-    return parseOut((msg.content || []).filter(b => b.type === "text").map(b => b.text).join(""));
+    return task.normalize(parseOut((msg.content || []).filter(b => b.type === "text").map(b => b.text).join("")));
 }

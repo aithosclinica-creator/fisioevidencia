@@ -66,6 +66,12 @@ summary{cursor:pointer;color:var(--brand);font-size:.9rem}
 .sumcard h2{margin:0 0 6px}
 .sumcard ul{padding-left:18px;margin:6px 0}
 .sumcard li{margin-bottom:6px}
+textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:.95rem}
+.hfield{margin-bottom:12px}
+.hfield label{margin-bottom:4px}
+.origin{font-size:.8rem;color:var(--muted);margin-top:2px}
+.origin.bad{color:var(--warn-ink)}
+.tabs button{font-size:.9rem}
 .rank{padding-left:22px;margin:6px 0}.rank li{margin-bottom:8px}
 .ref{color:var(--brand);font-weight:600;text-decoration:none;font-size:.85rem}
 .pill{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:6px;border:1px solid currentColor;margin-left:4px;color:var(--muted)}
@@ -86,6 +92,7 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-buscar" aria-selected="true">Buscar</button>
     <button role="tab" id="tab-guardados" aria-selected="false">Guardados (<span id="nsaved">0</span>)</button>
+    <button role="tab" id="tab-consulta" aria-selected="false">Consulta</button>
   </div>
 
   <section id="view-buscar">
@@ -116,6 +123,27 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
       <p class="meta" id="qinfo" style="margin:10px 0 0"></p>
     </div>
     <div id="results"></div>
+  </section>
+
+  <section id="view-consulta" hidden>
+    <div class="stop" style="display:block"><strong>Prototipo: solo pacientes ficticios.</strong> No uses datos de pacientes reales hasta que el servicio tenga contrato de protección de datos, consentimiento y evaluación de impacto. La conversación se envía a Gemini gratuito, que puede usarla para mejorar sus productos.</div>
+    <div class="card">
+      <label><input type="checkbox" id="h-fict"> Confirmo que es un paciente ficticio</label>
+      <label style="font-weight:400"><input type="checkbox" id="h-consent"> Consentimiento de grabación firmado (simulado)</label>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="h-rec" type="button" disabled>Empezar a escuchar</button>
+        <span class="meta" id="h-recinfo"></span>
+      </div>
+      <p class="meta" id="h-interim" style="min-height:1.5em"></p>
+      <label for="h-text">Transcripción (puedes corregirla o pegar texto)</label>
+      <textarea id="h-text" rows="8" placeholder="Aquí aparece lo que se va diciendo en la consulta…"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="h-make" type="button">Crear historia clínica</button>
+        <button class="link" id="h-clear" type="button">Borrar todo</button>
+      </div>
+      <p class="meta" id="h-msg"></p>
+    </div>
+    <div id="h-out"></div>
   </section>
 
   <section id="view-guardados" hidden>
@@ -489,6 +517,59 @@ function initSettings(){
     renderSummaryCard(); };
 }
 
+// ---- Consulta: historia clínica a partir de la conversación (prototipo, pacientes ficticios) ----
+const H = {rec:null, listening:false, data:null};
+function norm(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]/g," ").replace(/\s+/g," ").trim(); }
+function initHistory(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec=$("#h-rec"), fict=$("#h-fict"), cons=$("#h-consent");
+  const upd=()=>{ rec.disabled = !(fict.checked && cons.checked) || !SR; };
+  fict.onchange=upd; cons.onchange=upd; upd();
+  if (!SR) $("#h-recinfo").textContent="Este navegador no permite dictado; escribe o pega la transcripción.";
+  rec.onclick=()=>{
+    if (H.listening){ H.listening=false; H.rec && H.rec.stop(); return; }
+    const r=new SR(); r.lang="es-ES"; r.continuous=true; r.interimResults=true; H.rec=r; H.listening=true;
+    rec.textContent="Parar"; rec.classList.add("on"); $("#h-recinfo").textContent="Escuchando…";
+    r.onresult=e=>{ let interim="";
+      for (let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript;
+        if (e.results[i].isFinal){ const ta=$("#h-text"); ta.value=(ta.value.trim()+" "+t.trim()).trim()+"\n"; ta.scrollTop=ta.scrollHeight; } else interim+=t; }
+      $("#h-interim").textContent=interim; };
+    r.onerror=ev=>{ if(ev.error==="not-allowed"){ H.listening=false; $("#h-recinfo").textContent="Sin permiso para usar el micrófono."; } };
+    r.onend=()=>{ if (H.listening){ try{ r.start(); }catch(e){} return; } rec.textContent="Empezar a escuchar"; rec.classList.remove("on"); $("#h-recinfo").textContent=""; $("#h-interim").textContent=""; };
+    r.start();
+  };
+  $("#h-make").onclick=makeHistory;
+  $("#h-clear").onclick=()=>{ $("#h-text").value=""; $("#h-out").innerHTML=""; $("#h-msg").textContent=""; H.data=null; };
+}
+async function makeHistory(){
+  const svc=getSvc(), txt=$("#h-text").value.trim(), msg=$("#h-msg");
+  if (!$("#h-fict").checked){ msg.textContent="Marca que es un paciente ficticio."; return; }
+  if (!svc.url){ msg.innerHTML="Primero configura el servicio en <strong>Ajustes del resumen con IA</strong>, al final de la página."; return; }
+  if (txt.length<40){ msg.textContent="La transcripción es demasiado corta."; return; }
+  const p=checkPII(txt); if (p && p.level==="block"){ msg.textContent="La transcripción "+p.why+". Quítalo antes de continuar."; return; }
+  if (H.listening){ H.listening=false; H.rec && H.rec.stop(); }
+  msg.textContent="Creando la historia… suele tardar entre 10 y 40 segundos.";
+  try{
+    const res=await fetch(svc.url.replace(/\/+$/,"")+"/historia",{method:"POST",headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},body:JSON.stringify({transcript:txt, ficticio:true})});
+    const data=await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
+    if (!res.ok || data.error) throw new Error(data.error||("HTTP "+res.status));
+    H.data=data; msg.textContent=""; renderHistory(data, txt);
+  }catch(e){ msg.textContent="No se pudo crear la historia: "+e.message+". Si dice que el servicio no reconoce la petición, vuelve a pegar el código nuevo en Cloudflare."; }
+}
+function renderHistory(d, txt){
+  const T=norm(txt);
+  const origin=c=>{ if(!c) return ""; const ok=T.includes(norm(c)); return "<div class='origin"+(ok?"":" bad")+"'>"+(ok?"Dicho en la consulta: «"+esc(c)+"»":"Revisar: esta frase no aparece literal en la transcripción («"+esc(c)+"»)")+"</div>"; };
+  let html="<div class='card'><h2 style='margin-top:0'>Historia clínica (borrador)</h2><p class='meta'>Revisa y corrige cada apartado. Nada es definitivo hasta que tú lo validas.</p>";
+  (d.campos||[]).forEach(([k,label],i)=>{ const f=d[k]||{texto:"",cita:""};
+    html+="<div class='hfield'><label for='hf-"+i+"'>"+esc(label)+"</label><textarea id='hf-"+i+"' data-label='"+esc(label)+"' rows='"+(f.texto?2:1)+"' placeholder='No se mencionó'>"+esc(f.texto)+"</textarea>"+origin(f.cita)+"</div>"; });
+  if ((d.senales_mencionadas||[]).length) html+="<h3>Señales mencionadas para revisar</h3><ul>"+d.senales_mencionadas.map(x=>"<li>"+esc(x.texto)+origin(x.cita)+"</li>").join("")+"</ul><p class='meta'>Lista de lo dicho, no es un diagnóstico. La valoración es tuya.</p>";
+  if ((d.no_preguntado||[]).length) html+="<h3>No ha salido en la conversación</h3><ul>"+d.no_preguntado.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul>";
+  html+="<div class='row'><button class='primary' id='h-copy' type='button'>Copiar historia</button><span class='meta' id='h-copymsg'></span></div></div>";
+  $("#h-out").innerHTML=html;
+  $("#h-copy").onclick=()=>{ const t="HISTORIA CLÍNICA (paciente ficticio)\n\n"+[...document.querySelectorAll("#h-out textarea")].filter(a=>a.value.trim()).map(a=>a.dataset.label+":\n"+a.value.trim()).join("\n\n");
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>$("#h-copymsg").textContent="Copiada").catch(()=>$("#h-copymsg").textContent="No se pudo copiar en este navegador"); };
+}
+
 // ---- Interfaz ----
 function init(){
   loadSaved(); storeSaved();
@@ -502,9 +583,9 @@ function init(){
   document.addEventListener("click",e=>{ const k=e.target.getAttribute&&e.target.getAttribute("data-save"); if(k) toggleSave(k);
     const rf=e.target.getAttribute&&e.target.getAttribute("data-ref"); if(rf){ e.preventDefault(); const art=document.getElementById("art-"+rf); if(art){ art.hidden=false; art.scrollIntoView({behavior:"smooth",block:"center"}); art.style.outline="2px solid var(--brand)"; setTimeout(()=>art.style.outline="",1500); } }
     const m=e.target.getAttribute&&e.target.getAttribute("data-more"); if(m){ document.querySelectorAll(".extra-"+m).forEach(a=>a.hidden=false); e.target.remove(); } });
-  renderRegions(); renderRecent(); initVoice(); initSettings();
+  renderRegions(); renderRecent(); initVoice(); initSettings(); initHistory();
   $("#export").onclick=exportSaved;
-  const tabs={buscar:$("#tab-buscar"),guardados:$("#tab-guardados")};
+  const tabs={buscar:$("#tab-buscar"),guardados:$("#tab-guardados"),consulta:$("#tab-consulta")};
   Object.entries(tabs).forEach(([name,btn])=>btn.onclick=()=>{
     Object.entries(tabs).forEach(([n,b])=>{ b.setAttribute("aria-selected", n===name?"true":"false"); $("#view-"+n).hidden = n!==name; });
     if(name==="guardados") renderSaved();
