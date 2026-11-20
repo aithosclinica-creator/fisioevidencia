@@ -27,8 +27,10 @@ Reglas estrictas:
 - Da prioridad a guías de práctica clínica, después a revisiones sistemáticas y después a ensayos.
 - Señala con claridad cuando la evidencia es contradictoria, escasa, de muestras pequeñas o de baja calidad según los propios autores.
 - Si los artículos no responden a la pregunta, dilo y deja los hallazgos vacíos.
+- Ranking de técnicas: ordena como máximo 3 técnicas según el respaldo que les da la evidencia recuperada para esta patología (no para un paciente concreto). Criterios, en este orden: nivel del estudio (guía > revisión sistemática > ensayo), comparación directa entre técnicas, consistencia de los resultados y tamaño del efecto si se menciona. En "motivo" explica en una frase por qué está en ese puesto, con citas. Marca "comparacion": "directa" solo si algún artículo compara esas técnicas entre sí; si no, "indirecta".
+- Si la evidencia recuperada no permite ordenar con un mínimo de rigor (pocos estudios, resultados contradictorios o sin comparaciones), pon ranking_posible = false, deja el ranking vacío y explica el porqué en ranking_nota. Es preferible no ordenar a ordenar mal.
 - La certeza es una estimación aproximada a partir de resúmenes, no una evaluación GRADE formal.
-- Responde SOLO con un objeto JSON con los campos: resumen (texto), certeza ("alta"|"moderada"|"baja"|"muy baja"|"insuficiente"), hallazgos (lista de {texto, nivel: "guia"|"revision"|"eca"|"mixto", solidez: "consistente"|"contradictoria"|"limitada", refs: [números de artículo]}), tecnicas (lista de {tecnica, texto, refs}), lagunas (texto).
+- Responde SOLO con un objeto JSON con los campos: resumen (texto), certeza ("alta"|"moderada"|"baja"|"muy baja"|"insuficiente"), hallazgos (lista de {texto, nivel: "guia"|"revision"|"eca"|"mixto", solidez: "consistente"|"contradictoria"|"limitada", refs: [números de artículo]}), tecnicas (lista de {tecnica, texto, refs}), ranking_posible (true|false), ranking_nota (texto), ranking (lista de hasta 3 {puesto, tecnica, motivo, comparacion: "directa"|"indirecta", refs}), lagunas (texto).
 - Escribe en español, frases cortas y claras. Conserva en inglés solo los nombres de escalas o técnicas que no tengan traducción habitual.`;
 
 const SCHEMA = {
@@ -64,9 +66,27 @@ const SCHEMA = {
         additionalProperties: false,
       },
     },
+    ranking_posible: { type: "boolean" },
+    ranking_nota: { type: "string", description: "Cómo se ha ordenado, o por qué no se puede ordenar" },
+    ranking: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          puesto: { type: "integer", minimum: 1, maximum: 3 },
+          tecnica: { type: "string" },
+          motivo: { type: "string" },
+          comparacion: { type: "string", enum: ["directa", "indirecta"] },
+          refs: { type: "array", items: { type: "integer" } },
+        },
+        required: ["puesto", "tecnica", "motivo", "comparacion", "refs"],
+        additionalProperties: false,
+      },
+    },
     lagunas: { type: "string", description: "Qué no se sabe o qué falta en esta evidencia" },
   },
-  required: ["resumen", "certeza", "hallazgos", "tecnicas", "lagunas"],
+  required: ["resumen", "certeza", "hallazgos", "tecnicas", "ranking_posible", "ranking_nota", "ranking", "lagunas"],
   additionalProperties: false,
 };
 
@@ -177,6 +197,7 @@ function parseOut(text) {
   if (typeof out !== "object" || !out) throw fail("La respuesta de la IA no tenía el formato esperado", 502);
   out.hallazgos = Array.isArray(out.hallazgos) ? out.hallazgos : [];
   out.tecnicas = Array.isArray(out.tecnicas) ? out.tecnicas : [];
+  out.ranking = Array.isArray(out.ranking) ? out.ranking.slice(0, 3) : [];
   return out;
 }
 

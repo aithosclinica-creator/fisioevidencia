@@ -66,6 +66,7 @@ summary{cursor:pointer;color:var(--brand);font-size:.9rem}
 .sumcard h2{margin:0 0 6px}
 .sumcard ul{padding-left:18px;margin:6px 0}
 .sumcard li{margin-bottom:6px}
+.rank{padding-left:22px;margin:6px 0}.rank li{margin-bottom:8px}
 .ref{color:var(--brand);font-weight:600;text-decoration:none;font-size:.85rem}
 .pill{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:6px;border:1px solid currentColor;margin-left:4px;color:var(--muted)}
 .pill.contradictoria{color:var(--stop-ink)}.pill.limitada{color:var(--warn-ink)}.pill.consistente{color:var(--t1)}
@@ -132,6 +133,7 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
       <input type="text" id="svc-url" placeholder="https://fisioevidencia.tu-cuenta.workers.dev" autocomplete="off" inputmode="url">
       <label for="svc-code" style="margin-top:10px">Código de acceso</label>
       <input type="text" id="svc-code" placeholder="El código que pusiste en Cloudflare" autocomplete="off">
+      <label style="margin-top:10px;font-weight:400"><input type="checkbox" id="svc-auto" checked> Resumir automáticamente al buscar</label>
       <div class="row" style="margin-top:10px"><button class="primary" id="svc-save" type="button">Guardar ajustes</button><span class="meta" id="svc-msg"></span></div>
       <p class="meta">Se guardan solo en este dispositivo. Con Gemini gratuito, Google puede usar lo enviado para mejorar sus productos; aquí solo se envían resúmenes de artículos públicos, nunca datos de pacientes.</p>
     </div>
@@ -302,7 +304,7 @@ function showResults(all, fromCache){
     if (list.length>SHOW) html += "<button class='more' data-more='"+t.key+"'>Ver "+(list.length-SHOW)+" más</button>";
   });
   $("#results").innerHTML = html;
-  if (state.current) state.current.articles = arts;
+  if (state.current){ state.current.articles = arts; state.current.fresh = !fromCache; }
   renderSummaryCard();
 }
 
@@ -404,6 +406,8 @@ function renderSummaryCard(){
   const s = sumGet(state.current.base);
   if (s) return renderSummary(s);
   const svc=getSvc();
+  if (state.current.loading){ el.innerHTML="<h2>Resumen de la evidencia</h2><p class='empty'>Leyendo "+arts.length+" resúmenes…</p>"; return; }
+  if (svc.url && svc.auto!==false && state.current.fresh && !state.current.autoTried){ state.current.autoTried=true; return summarize(); }
   el.innerHTML = "<h2>Resumen de la evidencia</h2><p class='meta'>La IA lee los "+arts.length+" resúmenes de abajo y los sintetiza con citas a cada artículo.</p>"+
     "<div class='row'>"+(svc.url ? "<button class='primary' id='sum-go' type='button'>Resumir aquí</button>" : "<button class='link' id='open-settings' type='button'>Activar el resumen gratis</button>")+
     "<button class='link' id='copy-claude' type='button'>Copiar para Claude</button></div><p class='meta' id='copy-msg'></p>";
@@ -415,9 +419,14 @@ function renderSummary(s){
   const el=$("#summary"); const n=state.current.articles.length;
   const hall=(s.hallazgos||[]).filter(h=>refsHTML(h.refs,n));
   const tec=(s.tecnicas||[]).filter(h=>refsHTML(h.refs,n));
+  const rank=(s.ranking||[]).filter(h=>refsHTML(h.refs,n)).sort((a,b)=>a.puesto-b.puesto).slice(0,3);
+  const rankHTML = (s.ranking_posible && rank.length)
+    ? "<h3>Técnicas con más respaldo en esta evidencia</h3><ol class='rank'>"+rank.map(h=>"<li><strong>"+esc(h.tecnica)+"</strong><span class='pill'>"+(h.comparacion==="directa"?"comparadas entre sí":"sin comparación directa")+"</span><br>"+esc(h.motivo)+" "+refsHTML(h.refs,n)+"</li>").join("")+"</ol>"+
+      "<p class='meta'>"+esc(s.ranking_nota||"")+" Orden según la literatura sobre esta patología, no para un paciente concreto.</p>"
+    : "<h3>Técnicas con más respaldo</h3><p class='empty'>No se puede ordenar con rigor: "+esc(s.ranking_nota||"la evidencia recuperada no lo permite.")+"</p>";
   el.innerHTML = "<h2>Resumen de la evidencia</h2>"+
     "<p class='meta'>Certeza aproximada: <strong>"+esc(s.certeza||"")+"</strong>. Estimada a partir de los resúmenes, no es una evaluación GRADE.</p>"+
-    "<p>"+esc(s.resumen||"")+"</p>"+
+    "<p>"+esc(s.resumen||"")+"</p>"+rankHTML+
     (hall.length?"<h3>Hallazgos</h3><ul>"+hall.map(h=>"<li>"+esc(h.texto)+" "+refsHTML(h.refs,n)+"<span class='pill'>"+esc(NIVEL[h.nivel]||h.nivel)+"</span><span class='pill "+esc(h.solidez)+"'>"+esc(h.solidez)+"</span></li>").join("")+"</ul>":"<p class='empty'>Los artículos recuperados no permiten extraer hallazgos claros.</p>")+
     (tec.length?"<h3>Por técnica</h3><ul>"+tec.map(h=>"<li><strong>"+esc(h.tecnica)+":</strong> "+esc(h.texto)+" "+refsHTML(h.refs,n)+"</li>").join("")+"</ul>":"")+
     (s.lagunas?"<h3>Lo que falta por saber</h3><p>"+esc(s.lagunas)+"</p>":"")+
@@ -439,7 +448,8 @@ Formato de la respuesta, en español:
 1. Visión general (2 a 4 frases) y certeza aproximada (alta, moderada, baja, muy baja o insuficiente), aclarando que se estima a partir de resúmenes y no es una evaluación GRADE.
 2. Hallazgos principales, cada uno con sus citas, su nivel (guía, revisión o ensayo) y si la evidencia es consistente, contradictoria o limitada.
 3. Qué dice la evidencia de cada técnica que aparezca (ejercicio, EPI, punción seca, terapia manual, etc.), con citas.
-4. Lo que falta por saber.`;
+4. Técnicas con más respaldo: ordena como máximo 3 técnicas (1.ª, 2.ª, 3.ª) según el respaldo de esta evidencia para la patología (no para un paciente): primero nivel del estudio, luego comparación directa, consistencia y tamaño del efecto. Indica si hay comparación directa entre ellas. Si la evidencia no permite ordenar con rigor, dilo y no ordenes.
+5. Lo que falta por saber.`;
 function buildClaudePrompt(){
   const cur=state.current;
   const list=cur.articles.map((a,i)=>"["+(i+1)+"] "+((TIERS.find(t=>t.key===a.tier)||{}).badge||"")+" · "+a.year+" · "+a.title+(a.doi?" · doi:"+a.doi:a.pmid?" · PMID "+a.pmid:"")+"\nResumen: "+(a.abs||"Sin resumen")).join("\n\n");
@@ -455,22 +465,25 @@ function copyForClaude(){
 async function summarize(){
   const svc=getSvc(), el=$("#summary"), cur=state.current;
   el.innerHTML="<h2>Resumen de la evidencia</h2><p class='empty'>Leyendo "+cur.articles.length+" resúmenes… suele tardar entre 20 y 60 segundos.</p>";
+  cur.loading=true;
   try{
     const res = await fetch(svc.url.replace(/\/+$/,""), {method:"POST", headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},
       body: JSON.stringify({question: cur.question, articles: cur.articles.map(a=>({title:a.title, year:a.year, type:(TIERS.find(t=>t.key===a.tier)||{}).badge, abstract:a.abs}))})});
     const data = await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
     if (!res.ok || data.error) throw new Error(data.error || ("HTTP "+res.status));
+    cur.loading=false;
     if (state.current!==cur) return;
     sumPut(cur.base, data); renderSummary(data);
   }catch(e){
+    cur.loading=false;
     if (state.current!==cur) return;
     el.innerHTML="<h2>Resumen de la evidencia</h2><div class='stop' style='display:block'>No se pudo generar el resumen: "+esc(e.message)+".</div><button class='primary' id='sum-go' type='button'>Reintentar</button>";
     $("#sum-go").onclick=summarize;
   }
 }
 function initSettings(){
-  const s=getSvc(); $("#svc-url").value=s.url||""; $("#svc-code").value=s.code||"";
-  $("#svc-save").onclick=()=>{ const v={url:$("#svc-url").value.trim(), code:$("#svc-code").value.trim()};
+  const s=getSvc(); $("#svc-url").value=s.url||""; $("#svc-code").value=s.code||""; $("#svc-auto").checked = s.auto!==false;
+  $("#svc-save").onclick=()=>{ const v={url:$("#svc-url").value.trim(), code:$("#svc-code").value.trim(), auto:$("#svc-auto").checked};
     if (v.url && !/^https:\/\//.test(v.url)){ $("#svc-msg").textContent="La dirección debe empezar por https://"; return; }
     try{ localStorage.setItem("fe_svc", JSON.stringify(v)); $("#svc-msg").textContent="Guardado"; }catch(e){ $("#svc-msg").textContent="No se pudo guardar en este navegador"; }
     renderSummaryCard(); };
