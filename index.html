@@ -82,6 +82,22 @@ textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line)
 .pill.contradictoria{color:var(--stop-ink)}.pill.limitada{color:var(--warn-ink)}.pill.consistente{color:var(--t1)}
 .settings{max-width:860px;margin:0 auto;padding:0 16px}
 .settings summary{padding:6px 0}
+.tabs{overflow-x:auto;scrollbar-width:none}.tabs button{flex:1 0 auto;padding:10px 12px;white-space:nowrap}
+.ptab{width:100%;border-collapse:collapse;font-size:.92rem;margin:6px 0}
+.ptab td{border-top:1px solid var(--line);padding:6px 4px;vertical-align:top}
+.ptab td:first-child{color:var(--muted);width:34%}
+.cita{font-size:.78rem;color:var(--muted);font-style:italic;display:block}
+.cita.bad{color:var(--warn-ink);font-style:normal}
+.prow{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}.prow input{flex:1;min-width:120px;padding:8px}
+.pill.ok{color:var(--t1)}.pill.pend{color:var(--warn-ink)}
+.exi{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.exi input,.exi textarea{margin-top:6px;padding:8px}
+.exi .g{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.qr svg{width:220px;height:220px;background:#fff;padding:6px;border-radius:8px}
+.pex{border-left:4px solid var(--brand)}
+.pex h3{margin:0 0 4px}
+.pdone{display:flex;align-items:center;gap:10px;font-weight:600;margin-top:8px}
+.pdone input{width:24px;height:24px}
 footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);font-size:.8rem}
 </style>
 </head>
@@ -95,8 +111,10 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
 
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-buscar" aria-selected="true">Buscar</button>
-    <button role="tab" id="tab-guardados" aria-selected="false">Guardados (<span id="nsaved">0</span>)</button>
+    <button role="tab" id="tab-protocolos" aria-selected="false">Protocolos</button>
+    <button role="tab" id="tab-programa" aria-selected="false">Programa</button>
     <button role="tab" id="tab-consulta" aria-selected="false">Consulta</button>
+    <button role="tab" id="tab-guardados" aria-selected="false">Guardados (<span id="nsaved">0</span>)</button>
   </div>
 
   <section id="view-buscar">
@@ -178,6 +196,48 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
     <div class="row" style="margin-bottom:16px"><button class="primary" id="h-copyall" type="button">Copiar historia completa</button><span class="meta" id="h-copymsg"></span></div>
   </section>
 
+  <section id="view-protocolos" hidden>
+    <div class="card">
+      <h2 style="margin-top:0">Parámetros que usan los estudios</h2>
+      <p class="meta" style="margin-top:0">Saca de los estudios la dosis tal como la aplicaron (intensidad, tiempo, sesiones, series, progresión), con la frase exacta del artículo. Tú lo revisas antes de guardarlo en tu biblioteca. Es lo que publicó la literatura, no una pauta para un paciente.</p>
+      <label for="pr-q">Patología</label>
+      <input type="text" id="pr-q" list="h-pathlist" placeholder="Ej.: tendinopatía rotuliana" autocomplete="off">
+      <label style="margin-top:10px">Técnica</label>
+      <div class="chips" id="pr-tech"></div>
+      <div class="row"><button class="primary" id="pr-go" type="button">Buscar parámetros</button><button class="link" id="pr-cur" type="button">Usar mi última búsqueda</button></div>
+      <div id="pr-pii" class="stop"></div>
+      <p class="meta" id="pr-msg" style="margin-bottom:0"></p>
+    </div>
+    <div id="pr-out"></div>
+    <h2>Mi biblioteca de protocolos <span class="meta" id="pr-count"></span></h2>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="pr-filter" placeholder="Filtrar por patología o técnica" autocomplete="off" style="flex:1;min-width:180px">
+      <button class="link" id="pr-new" type="button">Añadir uno a mano</button>
+      <button class="link" id="pr-export" type="button">Exportar</button>
+      <button class="link" id="pr-import" type="button">Importar</button>
+      <input type="file" id="pr-file" accept="application/json,.json" hidden>
+    </div>
+    <div id="pr-lib"></div>
+  </section>
+
+  <section id="view-programa" hidden>
+    <div class="card">
+      <h2 style="margin-top:0">Programa de ejercicios para el paciente</h2>
+      <p class="meta" style="margin-top:0">El paciente lo abre con un enlace o un QR y apunta en su móvil qué ha hecho y cómo le ha dolido. El programa va dentro del propio enlace: no se guarda en ningún servidor. <strong>No escribas el nombre ni datos del paciente.</strong></p>
+      <label for="pg-title">Título</label>
+      <input type="text" id="pg-title" placeholder="Ej.: Tendón rotuliano · fase 1" autocomplete="off" maxlength="80">
+      <label style="margin-top:12px">Añadir ejercicio</label>
+      <div class="row"><select id="pg-preset" style="flex:1;min-width:200px"></select><button class="link" id="pg-add" type="button">Añadir</button><button class="link" id="pg-blank" type="button">Ejercicio en blanco</button></div>
+      <div id="pg-items" style="margin-top:12px"></div>
+      <label for="pg-notes" style="margin-top:12px">Indicaciones generales</label>
+      <textarea id="pg-notes" rows="3" maxlength="600" placeholder="Ej.: Un dolor de hasta 3/10 durante el ejercicio es aceptable si al día siguiente no ha aumentado."></textarea>
+      <div id="pg-pii" class="stop"></div>
+      <div class="row" style="margin-top:12px"><button class="primary" id="pg-make" type="button">Crear enlace y QR</button><button class="link" id="pg-savetpl" type="button">Guardar como plantilla</button><select id="pg-tpls"></select><button class="link" id="pg-clear" type="button">Vaciar</button></div>
+      <p class="meta" id="pg-msg"></p>
+    </div>
+    <div id="pg-out"></div>
+  </section>
+
   <section id="view-guardados" hidden>
     <div class="row" style="margin-bottom:10px">
       <button class="link" id="export">Copiar referencias guardadas</button>
@@ -185,6 +245,7 @@ footer{max-width:860px;margin:0 auto;padding:8px 16px 30px;color:var(--muted);fo
     <div id="saved"></div>
   </section>
 </main>
+<div id="patient" hidden></div>
 <section class="settings" aria-label="Ajustes del resumen">
   <details id="settings">
     <summary>Ajustes del resumen con IA</summary>
@@ -314,7 +375,7 @@ async function searchTier(base, tier){
   return {hits:(data.resultList&&data.resultList.result)||[], total:data.hitCount||0};
 }
 
-async function run(){
+async function run(opts={}){
   const raw = $("#q").value;
   const p = checkPII(raw);
   const box = $("#pii");
@@ -333,7 +394,7 @@ async function run(){
   $("#qinfo").textContent = "Consulta enviada: "+base;
 
   addRecent(raw.trim(), [...state.tech]);
-  state.current = {question: raw.trim() + (techs.length ? " (técnicas: "+techs.map(t=>t.label).join(", ")+")" : ""), base, articles: []};
+  state.current = {question: raw.trim() + (techs.length ? " (técnicas: "+techs.map(t=>t.label).join(", ")+")" : ""), base, articles: [], autoTried: !!opts.noAuto};
   const out = $("#results");
   const cached = cacheGet(base);
   if (cached){ showResults(cached, true); }
@@ -348,7 +409,7 @@ async function run(){
        "Si has abierto el archivo dentro de la app de Claude, esa vista previa bloquea internet. Descárgalo y ábrelo con Chrome, Safari o Edge.")+
       "<br><span class='meta'>Detalle técnico: "+esc(e.message)+"</span></div>";
   }
-  out.scrollIntoView({behavior:"smooth", block:"start"});
+  if (!opts.noScroll) out.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 const SHOW = 3;
@@ -470,7 +531,7 @@ function renderSummaryCard(){
   if (svc.url && svc.auto!==false && state.current.fresh && !state.current.autoTried){ state.current.autoTried=true; return summarize(); }
   el.innerHTML = "<h2>Resumen de la evidencia</h2><p class='meta'>La IA lee los "+arts.length+" resúmenes de abajo y los sintetiza con citas a cada artículo.</p>"+
     "<div class='row'>"+(svc.url ? "<button class='primary' id='sum-go' type='button'>Resumir aquí</button>" : "<button class='link' id='open-settings' type='button'>Activar el resumen gratis</button>")+
-    "<button class='link' id='copy-claude' type='button'>Copiar para Claude</button></div><p class='meta' id='copy-msg'></p>";
+    "<button class='link' id='copy-claude' type='button'>Copiar para Claude</button><button class='link' data-proto='1' type='button'>Ver dosis y parámetros de estos estudios</button></div><p class='meta' id='copy-msg'></p>";
   $("#copy-claude").onclick=copyForClaude;
   const b=$("#sum-go"); if(b) b.onclick=summarize;
   const o=$("#open-settings"); if(o) o.onclick=()=>{ $("#settings").open=true; $("#settings").scrollIntoView({behavior:"smooth"}); $("#svc-url").focus(); };
@@ -491,7 +552,7 @@ function renderSummary(s){
     (tec.length?"<h3>Por técnica</h3><ul>"+tec.map(h=>"<li><strong>"+esc(h.tecnica)+":</strong> "+esc(h.texto)+" "+refsHTML(h.refs,n)+"</li>").join("")+"</ul>":"")+
     (s.lagunas?"<h3>Lo que falta por saber</h3><p>"+esc(s.lagunas)+"</p>":"")+
     "<p class='meta'>Resumen generado por IA solo a partir de los artículos de esta página. Puede contener errores: toca cada cita para comprobarla. No es una recomendación clínica.</p>"+
-    "<button class='link' id='copy-claude' type='button'>Copiar para Claude</button> <span class='meta' id='copy-msg'></span>";
+    "<div class='actions'><button class='link' data-proto='1' type='button'>Ver dosis y parámetros de estos estudios</button><button class='link' id='copy-claude' type='button'>Copiar para Claude</button></div><span class='meta' id='copy-msg'></span>";
   $("#copy-claude").onclick=copyForClaude;
 }
 const CLAUDE_RULES = `Eres un asistente que resume literatura científica para un fisioterapeuta colegiado en España.
@@ -713,8 +774,338 @@ function renderPainList(){
   document.querySelectorAll("[data-pmdel]").forEach(b=>b.onclick=()=>PM.remove(+b.dataset.pmdel));
 }
 
+// ---- Protocolos: parámetros reportados por los estudios, revisados por el fisioterapeuta ----
+const PR = {tech:null, ctx:null, data:null, editing:null};
+function protoCacheGet(k){ try{ const c=JSON.parse(localStorage.getItem("fe_proto")||"{}")[k]; if(c && Date.now()-c.t<30*864e5) return c.s; }catch(e){} return null; }
+function protoCachePut(k,s){ try{ const c=JSON.parse(localStorage.getItem("fe_proto")||"{}"); c[k]={t:Date.now(),s}; Object.keys(c).sort((a,b)=>c[b].t-c[a].t).slice(30).forEach(x=>delete c[x]); localStorage.setItem("fe_proto",JSON.stringify(c)); }catch(e){} }
+function libGet(){ try{ return JSON.parse(localStorage.getItem("fe_lib")||"[]"); }catch(e){ return []; } }
+function libPut(l){ try{ localStorage.setItem("fe_lib", JSON.stringify(l)); return true; }catch(e){ return false; } }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function citaOk(cita, abs){ const c=norm(cita); return c.length>=8 && norm(abs).includes(c); }
+
+function initProtocols(){
+  const box=$("#pr-tech");
+  TECH.filter(t=>t.id!=="eco").forEach(t=>{ const b=document.createElement("button"); b.className="chip"; b.type="button"; b.textContent=t.label; b.dataset.id=t.id; b.setAttribute("aria-pressed","false");
+    b.onclick=()=>{ PR.tech = PR.tech===t.id ? null : t.id; box.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", x.dataset.id===PR.tech?"true":"false")); };
+    box.appendChild(b); });
+  $("#pr-go").onclick=protoSearch;
+  $("#pr-q").addEventListener("keydown",e=>{ if(e.key==="Enter") protoSearch(); });
+  $("#pr-cur").onclick=()=>{ if(!state.current || !state.current.articles.length){ $("#pr-msg").textContent="Aún no has hecho ninguna búsqueda en esta sesión."; return; } extractProtocols(state.current); };
+  $("#pr-filter").oninput=renderLib;
+  $("#pr-new").onclick=()=>{ const p={id:uid(), nombre:"", patologia:"", tecnica:"", poblacion:"", resultado:"", parametros:[{campo:"",valor:"",fuente:-1,cita:""}], fuentes:[], revisado:false, notas:"", fecha:new Date().toISOString().slice(0,10)}; PR.editing=p; renderLib(); };
+  $("#pr-export").onclick=exportLib;
+  $("#pr-import").onclick=()=>$("#pr-file").click();
+  $("#pr-file").onchange=importLib;
+  renderLib();
+}
+async function protoSearch(){
+  const raw=$("#pr-q").value, p=checkPII(raw), box=$("#pr-pii");
+  if (p){ box.style.display="block"; box.textContent=(p.level==="block"?"Bloqueado: el texto ":"Aviso: el texto ")+p.why+". Escribe solo la patología."; return; }
+  box.style.display="none";
+  if (!raw.trim()){ $("#pr-q").focus(); return; }
+  $("#q").value=raw; setTech(PR.tech?[PR.tech]:[]);
+  $("#pr-msg").textContent="Buscando estudios…"; $("#pr-out").innerHTML="";
+  await run({noAuto:true, noScroll:true});
+  if (!state.current || !state.current.articles.length){ $("#pr-msg").textContent="No se encontraron estudios para esta búsqueda, o no hay conexión."; return; }
+  extractProtocols(state.current);
+}
+function protoBody(cur){ return JSON.stringify({question: cur.question, articles: cur.articles.map(a=>({title:a.title, year:a.year, type:(TIERS.find(t=>t.key===a.tier)||{}).badge, abstract:a.abs}))}); }
+async function extractProtocols(cur){
+  const svc=getSvc(), msg=$("#pr-msg");
+  const ctx={question:cur.question, base:cur.base, articles:cur.articles.slice()}; PR.ctx=ctx;
+  if ($("#view-protocolos").hidden) $("#tab-protocolos").click();
+  const c=protoCacheGet(ctx.base);
+  if (c){ msg.textContent=""; return renderProtocols(c, ctx); }
+  if (!svc.url){ msg.innerHTML="Para extraer los parámetros hace falta el servicio de resumen. Actívalo en <strong>Ajustes del resumen</strong>, abajo del todo."; return; }
+  msg.textContent="Leyendo "+ctx.articles.length+" resúmenes y buscando dosis, sesiones y series… suele tardar entre 20 y 60 segundos.";
+  try{
+    const res=await fetch(svc.url.replace(/\/+$/,"")+"/protocolo",{method:"POST",headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},body:protoBody(ctx)});
+    const data=await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
+    if (!res.ok || data.error) throw new Error(data.error||("HTTP "+res.status));
+    if (!Array.isArray(data.protocolos)) throw new Error("El servicio no reconoce los protocolos. Vuelve a pegar el código del servicio en Cloudflare (ver LEEME).");
+    if (PR.ctx!==ctx) return;
+    protoCachePut(ctx.base, data); msg.textContent=""; renderProtocols(data, ctx);
+  }catch(e){
+    if (PR.ctx!==ctx) return;
+    msg.innerHTML="<span style='color:var(--stop-ink)'>No se pudieron extraer los parámetros: "+esc(e.message)+".</span> <button class='link' id='pr-retry' type='button'>Reintentar</button>";
+    $("#pr-retry").onclick=()=>extractProtocols(ctx);
+  }
+}
+function srcLink(a, n){ return "<a class='ref' href='"+esc(a.url)+"' target='_blank' rel='noopener' title='"+esc(a.title)+"'>["+n+"]</a>"; }
+function renderProtocols(d, ctx){
+  PR.data=d; const n=ctx.articles.length;
+  const list=(d.protocolos||[]).map(p=>({...p, parametros:(p.parametros||[]).filter(x=>Number.isInteger(x.ref)&&x.ref>=1&&x.ref<=n)})).filter(p=>p.parametros.length);
+  PR.list=list;
+  let html="<div class='card sumcard'><h2>Parámetros encontrados <span class='meta'>· "+esc(ctx.question)+"</span></h2>";
+  if (!list.length) html+="<p class='empty'>Los resúmenes de estos estudios no describen la dosis de la intervención. Suele estar en el texto completo: abre los artículos.</p>";
+  list.forEach((p,i)=>{
+    const refs=[...new Set([...(p.refs||[]).filter(x=>x>=1&&x<=n), ...p.parametros.map(x=>x.ref)])];
+    html+="<div class='card' style='margin:10px 0 0'><strong>"+esc(p.tecnica)+"</strong>"+(p.poblacion?"<div class='meta'>"+esc(p.poblacion)+"</div>":"")+
+      "<table class='ptab'>"+p.parametros.map(x=>{ const a=ctx.articles[x.ref-1]; const ok=citaOk(x.cita, a.abs);
+        return "<tr><td>"+esc(x.campo)+"</td><td>"+esc(x.valor)+" "+srcLink(a,x.ref)+
+          (ok?"<span class='cita'>«"+esc(x.cita)+"»</span>":"<span class='cita bad'>No encuentro esta frase literal en el resumen [" +x.ref+"]; compruébalo en el artículo.</span>")+"</td></tr>"; }).join("")+"</table>"+
+      (p.resultado?"<p class='concl' style='margin:4px 0'><strong>Qué observaron:</strong> "+esc(p.resultado)+"</p>":"")+
+      "<div class='meta'>Fuentes: "+refs.map(r=>{ const a=ctx.articles[r-1]; return srcLink(a,r)+" "+esc((TIERS.find(t=>t.key===a.tier)||{}).badge||"")+" "+esc(a.year); }).join(" · ")+"</div>"+
+      "<div class='actions'><button class='link' data-prsave='"+i+"' type='button'>Revisar y guardar en mi biblioteca</button></div></div>";
+  });
+  if (d.sin_parametros) html+="<p class='meta' style='margin-top:10px'>"+esc(d.sin_parametros)+"</p>";
+  html+="<p class='meta'>Extraído por IA de los resúmenes, no del texto completo. Cada valor lleva la frase del artículo de donde sale; si aparece en amarillo, no se ha podido comprobar. Es lo que aplicaron los estudios, no una recomendación clínica.</p></div>";
+  $("#pr-out").innerHTML=html;
+  $("#pr-out").querySelectorAll("[data-prsave]").forEach(b=>b.onclick=()=>startSave(+b.dataset.prsave));
+}
+function startSave(i){
+  const p=PR.list[i], ctx=PR.ctx; const used=[]; const map={};
+  const addSrc=r=>{ if(map[r]===undefined){ const a=ctx.articles[r-1]; map[r]=used.length; used.push({title:a.title, year:a.year, badge:(TIERS.find(t=>t.key===a.tier)||{}).badge||"", url:a.url}); } return map[r]; };
+  const n=ctx.articles.length;
+  (p.refs||[]).filter(r=>r>=1&&r<=n).forEach(addSrc);
+  const parametros=p.parametros.map(x=>({campo:x.campo, valor:x.valor, cita:citaOk(x.cita, ctx.articles[x.ref-1].abs)?x.cita:"", fuente:addSrc(x.ref)}));
+  const pat=ctx.question.replace(/\s*\(técnicas:.*\)$/,"");
+  PR.editing={id:uid(), nombre:p.tecnica+" · "+pat, patologia:pat, tecnica:p.tecnica, poblacion:p.poblacion, resultado:p.resultado, parametros, fuentes:used, revisado:false, notas:"", fecha:new Date().toISOString().slice(0,10)};
+  renderLib();
+  const ed=$("#pr-edit"); if(ed) ed.scrollIntoView({behavior:"smooth", block:"start"});
+}
+function protoText(p){
+  return p.nombre+"\n"+(p.poblacion?"Población: "+p.poblacion+"\n":"")+
+    p.parametros.map(x=>"- "+x.campo+": "+x.valor+(x.fuente>=0?" ["+(x.fuente+1)+"]":"")).join("\n")+
+    (p.resultado?"\nQué observaron: "+p.resultado:"")+(p.notas?"\nNotas: "+p.notas:"")+
+    (p.fuentes.length?"\nFuentes:\n"+p.fuentes.map((f,i)=>"["+(i+1)+"] "+f.title+" ("+f.year+"). "+f.url).join("\n"):"")+
+    "\n"+(p.revisado?"Revisado por el fisioterapeuta":"Pendiente de revisar");
+}
+function renderLib(){
+  const lib=libGet(), f=norm($("#pr-filter").value);
+  $("#pr-count").textContent=lib.length?"("+lib.length+")":"";
+  let html="";
+  if (PR.editing) html+=editorHTML(PR.editing);
+  const shown=lib.filter(p=>!PR.editing||p.id!==PR.editing.id).filter(p=>!f || norm(p.nombre+" "+p.patologia+" "+p.tecnica).includes(f));
+  if (!lib.length && !PR.editing) html+="<p class='empty'>Todavía no hay protocolos. Busca una patología arriba, revisa lo que se extrae y guárdalo; o añade uno a mano.</p>";
+  shown.forEach(p=>{
+    html+="<div class='card'><strong>"+esc(p.nombre||"Sin nombre")+"</strong><span class='pill "+(p.revisado?"ok":"pend")+"'>"+(p.revisado?"Revisado por ti":"Pendiente de revisar")+"</span>"+
+      (p.poblacion?"<div class='meta'>"+esc(p.poblacion)+"</div>":"")+
+      "<table class='ptab'>"+p.parametros.map(x=>"<tr><td>"+esc(x.campo)+"</td><td>"+esc(x.valor)+" "+(x.fuente>=0&&p.fuentes[x.fuente]?srcLink(p.fuentes[x.fuente],x.fuente+1):"<span class='meta'>(sin fuente)</span>")+"</td></tr>").join("")+"</table>"+
+      (p.resultado?"<p class='concl' style='margin:4px 0'><strong>Qué observaron:</strong> "+esc(p.resultado)+"</p>":"")+
+      (p.notas?"<p class='concl' style='margin:4px 0'><strong>Tus notas:</strong> "+esc(p.notas)+"</p>":"")+
+      (p.fuentes.length?"<details><summary>Fuentes ("+p.fuentes.length+")</summary><ol style='padding-left:20px;font-size:.88rem'>"+p.fuentes.map(s=>"<li><a href='"+esc(s.url)+"' target='_blank' rel='noopener'>"+esc(s.title)+"</a> <span class='meta'>"+esc(s.badge)+" · "+esc(s.year)+"</span></li>").join("")+"</ol></details>":"")+
+      "<div class='actions'><button class='link' data-predit='"+esc(p.id)+"' type='button'>Editar</button><button class='link' data-prcopy='"+esc(p.id)+"' type='button'>Copiar</button><button class='link' data-prdel='"+esc(p.id)+"' type='button'>Borrar</button></div></div>";
+  });
+  $("#pr-lib").innerHTML=html;
+  const el=$("#pr-lib");
+  el.querySelectorAll("[data-predit]").forEach(b=>b.onclick=()=>{ PR.editing=JSON.parse(JSON.stringify(libGet().find(p=>p.id===b.dataset.predit))); renderLib(); $("#pr-edit").scrollIntoView({behavior:"smooth",block:"start"}); });
+  el.querySelectorAll("[data-prcopy]").forEach(b=>b.onclick=()=>{ const p=libGet().find(x=>x.id===b.dataset.prcopy); (navigator.clipboard?navigator.clipboard.writeText(protoText(p)):Promise.reject()).then(()=>b.textContent="Copiado").catch(()=>b.textContent="No se pudo copiar"); });
+  el.querySelectorAll("[data-prdel]").forEach(b=>b.onclick=()=>{ if(b.dataset.sure){ libPut(libGet().filter(p=>p.id!==b.dataset.prdel)); renderLib(); } else { b.dataset.sure="1"; b.textContent="Pulsa otra vez para borrar"; } });
+  if (PR.editing) bindEditor();
+}
+function editorHTML(p){
+  const opts=i=>"<option value='-1'"+(i<0?" selected":"")+">Sin fuente (experiencia propia)</option>"+p.fuentes.map((s,j)=>"<option value='"+j+"'"+(i===j?" selected":"")+">["+(j+1)+"] "+esc(s.title.slice(0,60))+"</option>").join("");
+  return "<div class='card sumcard' id='pr-edit'><h2>"+(libGet().some(x=>x.id===p.id)?"Editar protocolo":"Revisar antes de guardar")+"</h2>"+
+    "<label>Nombre</label><input type='text' id='pe-nombre' value='"+esc(p.nombre)+"'>"+
+    "<div class='row' style='margin-top:8px'><div style='flex:1;min-width:160px'><label>Patología</label><input type='text' id='pe-pat' value='"+esc(p.patologia)+"'></div><div style='flex:1;min-width:160px'><label>Técnica</label><input type='text' id='pe-tec' value='"+esc(p.tecnica)+"'></div></div>"+
+    "<label style='margin-top:8px'>Población del estudio</label><input type='text' id='pe-pob' value='"+esc(p.poblacion)+"'>"+
+    "<label style='margin-top:10px'>Parámetros</label><div id='pe-params'>"+p.parametros.map((x,i)=>
+      "<div class='prow' data-i='"+i+"'><input type='text' class='pe-c' placeholder='Parámetro (p. ej. Intensidad)' value='"+esc(x.campo)+"'><input type='text' class='pe-v' placeholder='Valor (p. ej. 3 mA × 3 s × 3)' value='"+esc(x.valor)+"'>"+
+      "<select class='pe-f' style='flex:1 1 100%'>"+opts(x.fuente)+"</select>"+(x.cita?"<span class='cita' style='flex:1 1 100%'>«"+esc(x.cita)+"»</span>":"")+
+      "<button class='link pe-del' type='button'>Quitar</button></div>").join("")+"</div>"+
+    "<button class='link' id='pe-add' type='button'>Añadir parámetro</button>"+
+    "<label style='margin-top:10px'>Qué observaron</label><textarea id='pe-res' rows='2'>"+esc(p.resultado)+"</textarea>"+
+    "<label style='margin-top:10px'>Tus notas</label><textarea id='pe-notas' rows='2' placeholder='Ej.: en el texto completo indican aguja de 0,32 mm'>"+esc(p.notas)+"</textarea>"+
+    "<label style='margin-top:10px;font-weight:400'><input type='checkbox' id='pe-rev'"+(p.revisado?" checked":"")+"> He comprobado estos parámetros en los artículos originales</label>"+
+    "<div class='row' style='margin-top:10px'><button class='primary' id='pe-save' type='button'>Guardar en mi biblioteca</button><button class='link' id='pe-cancel' type='button'>Cancelar</button></div><p class='meta' id='pe-msg'></p></div>";
+}
+function readEditor(){
+  const p=PR.editing;
+  p.nombre=$("#pe-nombre").value.trim(); p.patologia=$("#pe-pat").value.trim(); p.tecnica=$("#pe-tec").value.trim(); p.poblacion=$("#pe-pob").value.trim();
+  p.resultado=$("#pe-res").value.trim(); p.notas=$("#pe-notas").value.trim(); p.revisado=$("#pe-rev").checked;
+  const old=p.parametros;
+  p.parametros=[...document.querySelectorAll("#pe-params .prow")].map(r=>{ const o=old[+r.dataset.i]||{}; const fuente=+r.querySelector(".pe-f").value; return {campo:r.querySelector(".pe-c").value.trim(), valor:r.querySelector(".pe-v").value.trim(), fuente, cita: fuente===o.fuente ? (o.cita||"") : ""}; });
+}
+function bindEditor(){
+  $("#pe-add").onclick=()=>{ readEditor(); PR.editing.parametros.push({campo:"",valor:"",fuente:-1,cita:""}); renderLib(); };
+  document.querySelectorAll("#pe-params .pe-del").forEach(b=>b.onclick=()=>{ b.closest(".prow").remove(); readEditor(); renderLib(); });
+  $("#pe-cancel").onclick=()=>{ PR.editing=null; renderLib(); };
+  $("#pe-save").onclick=()=>{
+    readEditor(); const p=PR.editing;
+    p.parametros=p.parametros.filter(x=>x.campo||x.valor);
+    const txt=[p.nombre,p.patologia,p.notas,p.poblacion,...p.parametros.map(x=>x.valor)].join(" ");
+    const pii=checkPII(txt);
+    if (pii && pii.level==="block"){ $("#pe-msg").textContent="No se guarda: el texto "+pii.why+". La biblioteca es general, sin datos de pacientes."; return; }
+    if (!p.nombre){ $("#pe-msg").textContent="Ponle un nombre."; $("#pe-nombre").focus(); return; }
+    if (!p.parametros.length){ $("#pe-msg").textContent="Añade al menos un parámetro."; return; }
+    const lib=libGet(); const i=lib.findIndex(x=>x.id===p.id);
+    if (i>=0) lib[i]=p; else lib.unshift(p);
+    if (!libPut(lib)){ $("#pe-msg").textContent="No se pudo guardar en este navegador."; return; }
+    PR.editing=null; renderLib();
+  };
+}
+function exportLib(){
+  const lib=libGet(); if(!lib.length){ $("#pr-export").textContent="No hay nada que exportar"; return; }
+  const blob=new Blob([JSON.stringify({app:"FisioEvidencia", tipo:"protocolos", version:1, exportado:new Date().toISOString().slice(0,10), protocolos:lib},null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="protocolos-fisioevidencia.json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function importLib(e){
+  const file=e.target.files[0]; if(!file) return;
+  file.text().then(t=>{
+    const d=JSON.parse(t); const arr=Array.isArray(d)?d:d.protocolos;
+    if(!Array.isArray(arr)) throw new Error("formato");
+    const lib=libGet(); let n=0;
+    arr.forEach(p=>{ if(!p||typeof p!=="object"||!Array.isArray(p.parametros)) return;
+      const clean={id:String(p.id||uid()), nombre:String(p.nombre||""), patologia:String(p.patologia||""), tecnica:String(p.tecnica||""), poblacion:String(p.poblacion||""), resultado:String(p.resultado||""), notas:String(p.notas||""), revisado:!!p.revisado, fecha:String(p.fecha||""),
+        fuentes:(Array.isArray(p.fuentes)?p.fuentes:[]).map(s=>({title:String(s.title||""), year:String(s.year||""), badge:String(s.badge||""), url:/^https:\/\//.test(s.url)?String(s.url):"#"})),
+        parametros:p.parametros.map(x=>({campo:String(x.campo||""), valor:String(x.valor||""), cita:String(x.cita||""), fuente:Number.isInteger(x.fuente)?x.fuente:-1}))};
+      const i=lib.findIndex(x=>x.id===clean.id); if(i>=0) lib[i]=clean; else lib.push(clean); n++; });
+    libPut(lib); renderLib(); $("#pr-msg").textContent="Importados "+n+" protocolos.";
+  }).catch(()=>{ $("#pr-msg").textContent="Ese archivo no es una exportación de protocolos de FisioEvidencia."; });
+  e.target.value="";
+}
+
+// ---- Programa de ejercicios para el paciente (enlace o QR, sin datos personales) ----
+const EX_PRESETS = [
+  ["Isométrico de cuádriceps en pared","Espalda apoyada en la pared y rodillas flexionadas en el ángulo indicado. Mantén la posición el tiempo indicado, respirando con normalidad."],
+  ["Sentadilla española","Con una banda elástica fija detrás de las rodillas, baja como si te sentaras manteniendo las tibias verticales y vuelve a subir."],
+  ["Sentadilla a una pierna en plano inclinado","De pie sobre una tabla inclinada, con el talón más alto que la punta. Baja lentamente con una pierna y sube ayudándote de las dos si te lo han indicado."],
+  ["Excéntrico de gemelo en escalón","Con la punta del pie en el borde de un escalón y la rodilla estirada, sube con los dos pies y baja el talón despacio con una sola pierna."],
+  ["Excéntrico de sóleo en escalón","Igual que el de gemelo pero con la rodilla algo flexionada durante todo el movimiento."],
+  ["Elevación de talones","De pie, sube de puntillas y baja controlando. Apóyate en una pared si lo necesitas para el equilibrio."],
+  ["Puente de glúteo","Tumbado boca arriba con las rodillas flexionadas, eleva la pelvis apretando los glúteos y baja despacio."],
+  ["Abducción de cadera tumbado de lado","Tumbado de lado con las piernas estiradas, eleva la pierna de arriba ligeramente hacia atrás, sin girar la pelvis, y baja despacio."],
+  ["Curl nórdico de isquiotibiales","De rodillas con los tobillos sujetos, déjate caer hacia delante lo más lento posible manteniendo cadera y tronco alineados."],
+  ["Rotación externa de hombro con banda","Codo pegado al cuerpo y flexionado a 90°. Gira el antebrazo hacia fuera contra la banda y vuelve despacio."],
+  ["Remo con banda","Tira de la banda hacia ti juntando las escápulas, sin elevar los hombros, y vuelve controlando."],
+  ["Elevación del brazo en el plano de la escápula","Con el pulgar hacia arriba, eleva el brazo hacia delante y un poco hacia fuera hasta la altura indicada y baja despacio."],
+  ["Excéntrico de extensores de muñeca","Antebrazo apoyado y palma hacia abajo. Sube el peso ayudándote de la otra mano y bájalo despacio solo con la muñeca."],
+  ["Retracción cervical","Sentado y erguido, lleva la barbilla hacia atrás como haciendo papada, sin inclinar la cabeza. Mantén unos segundos y relaja."],
+  ["Gato-camello","A cuatro patas, redondea la espalda hacia arriba y después arquéala hacia abajo, despacio y sin dolor."],
+  ["Perro de muestra","A cuatro patas, estira a la vez un brazo y la pierna contraria sin mover la pelvis. Vuelve y cambia de lado."],
+  ["Equilibrio a una pierna","De pie sobre una pierna cerca de un apoyo. Mantén el equilibrio el tiempo indicado. Puedes hacerlo con los ojos cerrados si te lo han indicado."],
+  ["Estiramiento de fascia plantar","Sentado, cruza el pie sobre la otra rodilla y tira de los dedos hacia ti hasta notar tensión en la planta."]
+];
+const PG = {items:[]};
+function pgDraftSave(){ try{ localStorage.setItem("fe_pgdraft", JSON.stringify({t:$("#pg-title").value, n:$("#pg-notes").value, items:PG.items})); }catch(e){} }
+function tplGet(){ try{ return JSON.parse(localStorage.getItem("fe_pgtpl")||"[]"); }catch(e){ return []; } }
+function initProgram(){
+  $("#pg-preset").innerHTML="<option value=''>Elige un ejercicio…</option>"+EX_PRESETS.map((e,i)=>"<option value='"+i+"'>"+esc(e[0])+"</option>").join("");
+  $("#pg-add").onclick=()=>{ const v=$("#pg-preset").value; if(v==="") return; const e=EX_PRESETS[+v]; PG.items.push({nombre:e[0], como:e[1], dosis:"", carga:"", frec:"", notas:"", video:""}); renderPgItems(); };
+  $("#pg-blank").onclick=()=>{ PG.items.push({nombre:"", como:"", dosis:"", carga:"", frec:"", notas:"", video:""}); renderPgItems(); };
+  $("#pg-make").onclick=makeProgram;
+  $("#pg-clear").onclick=()=>{ PG.items=[]; $("#pg-title").value=""; $("#pg-notes").value=""; $("#pg-out").innerHTML=""; renderPgItems(); };
+  $("#pg-savetpl").onclick=()=>{ readPgItems(); const t=$("#pg-title").value.trim(); if(!t||!PG.items.length){ $("#pg-msg").textContent="Pon un título y al menos un ejercicio."; return; }
+    const pii=checkPII(t+" "+$("#pg-notes").value+" "+PG.items.map(x=>x.nombre+" "+x.notas).join(" ")); if(pii&&pii.level==="block"){ $("#pg-msg").textContent="No se guarda: el texto "+pii.why+"."; return; }
+    const l=tplGet().filter(x=>x.t!==t); l.unshift({t, n:$("#pg-notes").value, items:PG.items}); try{ localStorage.setItem("fe_pgtpl", JSON.stringify(l.slice(0,40))); }catch(e){} renderTpls(); $("#pg-msg").textContent="Plantilla guardada."; };
+  $("#pg-tpls").onchange=()=>{ const t=tplGet().find(x=>x.t===$("#pg-tpls").value); if(!t) return; $("#pg-title").value=t.t; $("#pg-notes").value=t.n||""; PG.items=JSON.parse(JSON.stringify(t.items)); renderPgItems(); $("#pg-tpls").value=""; };
+  ["#pg-title","#pg-notes"].forEach(s=>$(s).addEventListener("input",()=>{ $("#pg-pii").style.display="none"; pgDraftSave(); }));
+  try{ const d=JSON.parse(localStorage.getItem("fe_pgdraft")||"null"); if(d){ $("#pg-title").value=d.t||""; $("#pg-notes").value=d.n||""; PG.items=Array.isArray(d.items)?d.items:[]; } }catch(e){}
+  renderTpls(); renderPgItems();
+}
+function renderTpls(){ const l=tplGet(); const s=$("#pg-tpls"); s.hidden=!l.length; s.innerHTML="<option value=''>Cargar plantilla…</option>"+l.map(x=>"<option>"+esc(x.t)+"</option>").join(""); }
+function readPgItems(){
+  document.querySelectorAll("#pg-items .exi").forEach(r=>{ const it=PG.items[+r.dataset.i]; if(!it) return; r.querySelectorAll("[data-k]").forEach(inp=>it[inp.dataset.k]=inp.value.trim()); });
+  pgDraftSave();
+}
+function renderPgItems(){
+  const el=$("#pg-items");
+  if (!PG.items.length){ el.innerHTML="<p class='empty'>Añade ejercicios de la lista o uno en blanco. La dosis la pones tú.</p>"; pgDraftSave(); return; }
+  el.innerHTML=PG.items.map((x,i)=>"<div class='exi' data-i='"+i+"'><div class='row'><strong style='flex:1'>"+(i+1)+".</strong>"+
+    (i?"<button class='link' data-up='"+i+"' type='button'>Subir</button>":"")+"<button class='link' data-rm='"+i+"' type='button'>Quitar</button></div>"+
+    "<input type='text' data-k='nombre' placeholder='Nombre del ejercicio' value='"+esc(x.nombre)+"' maxlength='80'>"+
+    "<textarea data-k='como' rows='2' placeholder='Cómo se hace' maxlength='400'>"+esc(x.como)+"</textarea>"+
+    "<div class='g'><input type='text' data-k='dosis' placeholder='Series × repeticiones o tiempo' value='"+esc(x.dosis)+"' maxlength='60'><input type='text' data-k='carga' placeholder='Carga o intensidad' value='"+esc(x.carga)+"' maxlength='60'>"+
+    "<input type='text' data-k='frec' placeholder='Frecuencia (p. ej. 3 días/semana)' value='"+esc(x.frec)+"' maxlength='60'><input type='text' data-k='video' placeholder='Enlace a vídeo (opcional)' value='"+esc(x.video)+"' maxlength='300'></div>"+
+    "<input type='text' data-k='notas' placeholder='Nota (p. ej. dolor permitido hasta 3/10)' value='"+esc(x.notas)+"' maxlength='200'></div>").join("");
+  el.querySelectorAll("[data-k]").forEach(i=>i.addEventListener("input",()=>{ readPgItems(); $("#pg-pii").style.display="none"; }));
+  el.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ readPgItems(); PG.items.splice(+b.dataset.rm,1); renderPgItems(); });
+  el.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>{ readPgItems(); const i=+b.dataset.up; [PG.items[i-1],PG.items[i]]=[PG.items[i],PG.items[i-1]]; renderPgItems(); });
+  pgDraftSave();
+}
+function b64u(bytes){ let s=""; bytes.forEach(b=>s+=String.fromCharCode(b)); return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function unb64u(s){ const b=atob(s.replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from(b, c=>c.charCodeAt(0)); }
+async function streamBytes(bytes, Stream){ const s=new Blob([bytes]).stream().pipeThrough(new Stream("deflate-raw")); return new Uint8Array(await new Response(s).arrayBuffer()); }
+async function encodeProgram(obj){
+  const raw=new TextEncoder().encode(JSON.stringify(obj));
+  if (window.CompressionStream){ try{ return "z"+b64u(await streamBytes(raw, CompressionStream)); }catch(e){} }
+  return "j"+b64u(raw);
+}
+async function decodeProgram(code){
+  let bytes=unb64u(code.slice(1));
+  if (code[0]==="z"){ if(!window.DecompressionStream) throw new Error("Tu navegador es demasiado antiguo para abrir este programa."); bytes=await streamBytes(bytes, DecompressionStream); }
+  else if (code[0]!=="j") throw new Error("Enlace no válido");
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+function loadQR(){
+  if (window.qrcode) return Promise.resolve();
+  return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"; s.onload=ok; s.onerror=()=>ko(new Error("no se pudo cargar el generador de QR")); document.head.appendChild(s); });
+}
+async function makeProgram(){
+  readPgItems();
+  const title=$("#pg-title").value.trim(), notes=$("#pg-notes").value.trim(), items=PG.items.filter(x=>x.nombre);
+  const box=$("#pg-pii");
+  const pii=checkPII([title,notes,...items.map(x=>[x.nombre,x.como,x.notas,x.dosis,x.carga,x.frec].join(" "))].join(" "));
+  if (pii){ box.style.display="block"; box.textContent=(pii.level==="block"?"No se crea el enlace: el texto ":"Revisa el texto: ")+pii.why+". El enlace no puede llevar datos del paciente."; if(pii.level==="block") return; }
+  else box.style.display="none";
+  if (!items.length){ $("#pg-msg").textContent="Añade al menos un ejercicio con nombre."; return; }
+  const bad=items.find(x=>x.video && !/^https:\/\//.test(x.video));
+  if (bad){ $("#pg-msg").textContent="El enlace al vídeo de «"+bad.nombre+"» debe empezar por https://"; return; }
+  $("#pg-msg").textContent="";
+  const obj={v:1, t:title||"Programa de ejercicios", n:notes, d:localDate(), e:items.map(x=>[x.nombre,x.como,x.dosis,x.carga,x.frec,x.notas,x.video])};
+  const code=await encodeProgram(obj);
+  const url=location.origin+location.pathname+"#p="+code;
+  const out=$("#pg-out");
+  out.innerHTML="<div class='card sumcard'><h2>Enlace para el paciente</h2><p class='meta'>Escanea el QR con el móvil del paciente o envíale el enlace. Si cambias el programa, crea un enlace nuevo.</p>"+
+    "<div class='qr' id='pg-qr'><p class='meta'>Generando QR…</p></div>"+
+    "<input type='text' readonly id='pg-url' value='"+esc(url)+"' style='margin-top:10px;font-size:.8rem'>"+
+    "<div class='actions'><button class='link' id='pg-copy' type='button'>Copiar enlace</button>"+(navigator.share?"<button class='link' id='pg-share' type='button'>Compartir</button>":"")+
+    "<a href='"+esc(url)+"' target='_blank' rel='noopener'>Ver como el paciente</a></div>"+
+    "<p class='meta'>El programa viaja dentro del enlace. Lo que el paciente apunte se queda en su móvil y no se envía a nadie.</p></div>";
+  $("#pg-copy").onclick=()=>{ (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(()=>$("#pg-copy").textContent="Copiado").catch(()=>{ $("#pg-url").select(); $("#pg-copy").textContent="Selecciona y copia"; }); };
+  const sh=$("#pg-share"); if(sh) sh.onclick=()=>navigator.share({title:obj.t, url}).catch(()=>{});
+  out.scrollIntoView({behavior:"smooth", block:"start"});
+  try{ await loadQR(); const q=qrcode(0, url.length>1200?"L":"M"); q.addData(url); q.make(); $("#pg-qr").innerHTML=q.createSvgTag(4,2); }
+  catch(e){ $("#pg-qr").innerHTML="<p class='meta'>No se pudo generar el QR ("+esc(e.message)+"). Usa el enlace.</p>"; }
+}
+
+// ---- Vista del paciente ----
+function localDate(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function hashStr(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return (h>>>0).toString(36); }
+async function patientView(code){
+  document.body.classList.add("pmode");
+  ["main",".settings","footer","header p"].forEach(s=>{ const e=$(s); if(e) e.hidden=true; });
+  const el=$("#patient"); el.hidden=false;
+  let p;
+  try{ p=await decodeProgram(code); if(!p || !Array.isArray(p.e)) throw new Error("Enlace no válido"); }
+  catch(e){ el.innerHTML="<main><div class='stop' style='display:block'>No se ha podido abrir el programa: "+esc(e.message)+". Pide a tu fisioterapeuta un enlace nuevo.</div></main>"; return; }
+  document.title=p.t||"Mi programa";
+  const key="fe_pl_"+hashStr(code);
+  const getLog=()=>{ try{ return JSON.parse(localStorage.getItem(key)||"{}"); }catch(e){ return {}; } };
+  const today=localDate();
+  const ex=p.e.map(a=>({nombre:a[0],como:a[1],dosis:a[2],carga:a[3],frec:a[4],notas:a[5],video:a[6]}));
+  function render(){
+    const log=getLog(), day=log[today]||{done:[], dolor:null};
+    const days=Object.keys(log).sort().reverse();
+    el.innerHTML="<main><h2 style='font-size:1.25rem;margin-top:4px'>"+esc(p.t)+"</h2>"+
+      "<p class='meta'>Programa preparado por tu fisioterapeuta"+(p.d?" el "+esc(p.d.split("-").reverse().join("/")):"")+". Si un ejercicio te duele más de lo que te ha indicado, para y coméntaselo.</p>"+
+      (p.n?"<div class='notice'>"+esc(p.n)+"</div>":"")+
+      ex.map((x,i)=>"<div class='card pex'><h3>"+(i+1)+". "+esc(x.nombre)+"</h3>"+
+        (x.como?"<p style='margin:4px 0'>"+esc(x.como)+"</p>":"")+
+        "<table class='ptab'>"+[["Series y repeticiones",x.dosis],["Carga",x.carga],["Frecuencia",x.frec],["Nota",x.notas]].filter(r=>r[1]).map(r=>"<tr><td>"+r[0]+"</td><td>"+esc(r[1])+"</td></tr>").join("")+"</table>"+
+        (x.video&&/^https:\/\//.test(x.video)?"<a href='"+esc(x.video)+"' target='_blank' rel='noopener noreferrer'>Ver vídeo</a>":"")+
+        "<label class='pdone'><input type='checkbox' data-done='"+i+"'"+(day.done.includes(i)?" checked":"")+"> Hecho hoy</label></div>").join("")+
+      "<div class='card'><label for='pd'>¿Cuánto te ha dolido hoy durante los ejercicios? <strong id='pdv'>"+(day.dolor??"–")+"</strong>/10</label>"+
+      "<input type='range' id='pd' min='0' max='10' value='"+(day.dolor??0)+"' style='width:100%'><p class='meta' style='margin:4px 0 0'>0 = nada, 10 = el peor dolor imaginable</p></div>"+
+      "<div class='card'><h3 style='margin:0 0 6px;font-size:1rem'>Mi registro</h3>"+
+      (days.length?"<table class='ptab'>"+days.slice(0,30).map(d=>"<tr><td>"+d.split("-").reverse().join("/")+"</td><td>"+log[d].done.length+" de "+ex.length+" ejercicios"+(log[d].dolor!=null?" · dolor "+log[d].dolor+"/10":"")+"</td></tr>").join("")+"</table>":"<p class='empty'>Marca los ejercicios que hagas cada día.</p>")+
+      "<div class='actions'><button class='link' id='pcopy' type='button'>Copiar mi registro para enviarlo a mi fisio</button></div>"+
+      "<p class='meta'>Lo que apuntas se guarda solo en este móvil y no se envía a nadie. Enséñaselo a tu fisioterapeuta en la próxima sesión.</p></div></main>";
+    const save=(fn)=>{ const l=getLog(); const d=l[today]||{done:[], dolor:null}; fn(d); l[today]=d; try{ localStorage.setItem(key, JSON.stringify(l)); }catch(e){} };
+    el.querySelectorAll("[data-done]").forEach(c=>c.onchange=()=>{ save(d=>{ const i=+c.dataset.done; d.done=d.done.filter(x=>x!==i); if(c.checked) d.done.push(i); }); render(); });
+    $("#pd").oninput=()=>{ $("#pdv").textContent=$("#pd").value; };
+    $("#pd").onchange=()=>{ save(d=>d.dolor=+$("#pd").value); render(); };
+    $("#pcopy").onclick=()=>{ const l=getLog(); const txt=p.t+"\n"+Object.keys(l).sort().map(d=>d.split("-").reverse().join("/")+": "+l[d].done.length+"/"+ex.length+" ejercicios"+(l[d].dolor!=null?", dolor "+l[d].dolor+"/10":"")).join("\n");
+      (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>$("#pcopy").textContent="Copiado").catch(()=>$("#pcopy").textContent="No se pudo copiar"); };
+  }
+  render();
+}
+
 // ---- Interfaz ----
 function init(){
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+  if (location.hash.startsWith("#p=")) return patientView(location.hash.slice(3));
   loadSaved(); storeSaved();
   const chips=$("#chips");
   TECH.forEach(t=>{ const b=document.createElement("button"); b.className="chip"; b.type="button"; b.textContent=t.label; b.setAttribute("aria-pressed","false"); b.dataset.id=t.id;
@@ -725,16 +1116,16 @@ function init(){
   $("#q").addEventListener("input",()=>{ $("#pii").style.display="none"; });
   document.addEventListener("click",e=>{ const k=e.target.getAttribute&&e.target.getAttribute("data-save"); if(k) toggleSave(k);
     const rf=e.target.getAttribute&&e.target.getAttribute("data-ref"); if(rf){ e.preventDefault(); const art=document.getElementById("art-"+rf); if(art){ art.hidden=false; art.scrollIntoView({behavior:"smooth",block:"center"}); art.style.outline="2px solid var(--brand)"; setTimeout(()=>art.style.outline="",1500); } }
+    if (e.target.getAttribute&&e.target.getAttribute("data-proto") && state.current) extractProtocols(state.current);
     const m=e.target.getAttribute&&e.target.getAttribute("data-more"); if(m){ document.querySelectorAll(".extra-"+m).forEach(a=>a.hidden=false); e.target.remove(); } });
-  renderRegions(); renderRecent(); initVoice(); initSettings(); initHistory(); initPathTools();
+  renderRegions(); renderRecent(); initVoice(); initSettings(); initHistory(); initPathTools(); initProtocols(); initProgram();
   $("#export").onclick=exportSaved;
-  const tabs={buscar:$("#tab-buscar"),guardados:$("#tab-guardados"),consulta:$("#tab-consulta")};
+  const tabs={buscar:$("#tab-buscar"),protocolos:$("#tab-protocolos"),programa:$("#tab-programa"),consulta:$("#tab-consulta"),guardados:$("#tab-guardados")};
   Object.entries(tabs).forEach(([name,btn])=>btn.onclick=()=>{
     Object.entries(tabs).forEach(([n,b])=>{ b.setAttribute("aria-selected", n===name?"true":"false"); $("#view-"+n).hidden = n!==name; });
     if(name==="guardados") renderSaved();
     if(name==="consulta") initPainMap();
   });
-  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 init();
 </script>

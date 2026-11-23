@@ -19,3 +19,7 @@ Guarda la clave de la IA fuera de la web pública. La app le envía la pregunta 
 - En el nivel gratuito, Google puede usar lo que se envía para mejorar sus productos. Aquí solo se envían resúmenes de artículos públicos.
 - Modelo por defecto: `gemini-3.5-flash`. Para cambiarlo, añade una variable de texto `GEMINI_MODEL`.
 - Opcional, de pago: si quitas `GEMINI_API_KEY` y añades `ANTHROPIC_API_KEY`, el resumen lo hace Claude (unos 0,10 € por resumen).
+
+## Actualización: protocolos
+
+El servicio ahora tiene también la ruta `/protocolo`, que extrae de los resúmenes los parámetros que aplicaron los estudios (intensidad, tiempo, sesiones, series…) con la frase literal de cada uno. Si ya tenías el servicio, vuelve a pegar el código de `worker.js` en Cloudflare (Edit code → reemplazar todo → Deploy). No hay que tocar las claves.

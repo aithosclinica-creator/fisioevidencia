@@ -182,6 +182,65 @@ async function handleHistory(body, env, origin) {
   }
 }
 
+// ---- Protocolos: parámetros que reportan los estudios (dosis, sesiones, series...) ----
+const PROTOCOL_SYSTEM = `Eres un asistente que extrae de resúmenes de artículos científicos los parámetros de aplicación de las intervenciones de fisioterapia, para una biblioteca de protocolos que revisa un fisioterapeuta colegiado.
+
+Reglas estrictas:
+- Extrae SOLO parámetros escritos de forma explícita en los resúmenes: intensidad, corriente, tiempo de aplicación, frecuencia de sesiones, número de sesiones, duración del programa, series, repeticiones, carga, tempo, progresión, descanso, localización o guía ecográfica, comparador.
+- No completes con valores típicos, no deduzcas y no conviertas unidades. Si un estudio no da un parámetro, no lo pongas.
+- Cada parámetro lleva "ref" (el número del artículo) y "cita": el fragmento literal del resumen donde aparece, copiado tal cual en el idioma original, de 4 a 25 palabras.
+- Agrupa por técnica y por estudio: un protocolo es una intervención concreta tal como la aplicó un estudio (o una guía). Si varios estudios aplican la misma técnica con parámetros distintos, son protocolos distintos.
+- "poblacion": a quién se aplicó, tal como lo describe el estudio (patología, nº de participantes si aparece). "resultado": qué se observó con esa intervención frente al comparador, en una frase y sin valorar. No des recomendaciones ni te dirijas a un paciente.
+- "sin_parametros": una frase indicando si muchos resúmenes no describen la dosis (es frecuente y es información útil).
+- Escribe "tecnica", "campo", "valor", "poblacion" y "resultado" en español. Máximo 8 protocolos, priorizando guías, revisiones y ensayos con parámetros más completos.
+- Responde SOLO con un objeto JSON: {"protocolos":[{"tecnica","poblacion","parametros":[{"campo","valor","ref","cita"}],"resultado","refs"}],"sin_parametros"}.`;
+const PROTOCOL_SCHEMA = {
+  type: "object",
+  properties: {
+    protocolos: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          tecnica: { type: "string" },
+          poblacion: { type: "string" },
+          parametros: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { campo: { type: "string" }, valor: { type: "string" }, ref: { type: "integer" }, cita: { type: "string" } },
+              required: ["campo", "valor", "ref", "cita"],
+              additionalProperties: false,
+            },
+          },
+          resultado: { type: "string" },
+          refs: { type: "array", items: { type: "integer" } },
+        },
+        required: ["tecnica", "poblacion", "parametros", "resultado", "refs"],
+        additionalProperties: false,
+      },
+    },
+    sin_parametros: { type: "string" },
+  },
+  required: ["protocolos", "sin_parametros"],
+  additionalProperties: false,
+};
+const PROTOCOL_TASK = {
+  system: PROTOCOL_SYSTEM,
+  schema: PROTOCOL_SCHEMA,
+  normalize(out) {
+    out.protocolos = (Array.isArray(out.protocolos) ? out.protocolos : []).slice(0, 8).map(p => ({
+      tecnica: String(p.tecnica || ""), poblacion: String(p.poblacion || ""), resultado: String(p.resultado || ""),
+      refs: Array.isArray(p.refs) ? p.refs.filter(Number.isInteger) : [],
+      parametros: (Array.isArray(p.parametros) ? p.parametros : []).map(x => ({
+        campo: String(x.campo || ""), valor: String(x.valor || ""), ref: Number.isInteger(x.ref) ? x.ref : 0, cita: String(x.cita || ""),
+      })).filter(x => x.valor && x.ref),
+    })).filter(p => p.parametros.length);
+    out.sin_parametros = String(out.sin_parametros || "");
+    return out;
+  },
+};
+
 function cors(origin) {
   const ok = ALLOWED_ORIGINS.includes(origin);
   return {
@@ -209,7 +268,8 @@ export default {
 
     let body;
     try { body = await request.json(); } catch { return json({ error: "Petición no válida" }, 400, origin); }
-    if (new URL(request.url).pathname.replace(/\/+$/, "") === "/historia") return handleHistory(body, env, origin);
+    const path = new URL(request.url).pathname.replace(/\/+$/, "");
+    if (path === "/historia") return handleHistory(body, env, origin);
     const question = String(body.question || "").slice(0, 300);
     const articles = Array.isArray(body.articles) ? body.articles.slice(0, MAX_ARTICLES) : [];
     if (!question || !articles.length) return json({ error: "Faltan la pregunta o los artículos" }, 400, origin);
@@ -222,7 +282,8 @@ export default {
     const userText = `Pregunta del fisioterapeuta: ${question}\n\nArtículos recuperados (${articles.length}):\n\n${list}`;
     let out;
     try {
-      out = env.GEMINI_API_KEY ? await callGemini(env, userText, SUMMARY_TASK) : await callClaude(env, userText, SUMMARY_TASK);
+      const task = path === "/protocolo" ? PROTOCOL_TASK : SUMMARY_TASK;
+      out = env.GEMINI_API_KEY ? await callGemini(env, userText, task) : await callClaude(env, userText, task);
     } catch (e) {
       return json({ error: e.message, detail: e.detail }, e.status || 502, origin);
     }
