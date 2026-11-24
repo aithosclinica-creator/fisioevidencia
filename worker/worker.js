@@ -186,14 +186,15 @@ async function handleHistory(body, env, origin) {
 const PROTOCOL_SYSTEM = `Eres un asistente que extrae de resúmenes de artículos científicos los parámetros de aplicación de las intervenciones de fisioterapia, para una biblioteca de protocolos que revisa un fisioterapeuta colegiado.
 
 Reglas estrictas:
-- Extrae SOLO parámetros escritos de forma explícita en los resúmenes: intensidad, corriente, tiempo de aplicación, frecuencia de sesiones, número de sesiones, duración del programa, series, repeticiones, carga, tempo, progresión, descanso, localización o guía ecográfica, comparador.
+- Extrae SOLO parámetros escritos de forma explícita en los resúmenes: fases tras la cirugía, carga o apoyo permitido, rango de movilidad por fase, criterios de progresión o de vuelta al deporte, intensidad, corriente, tiempo de aplicación, frecuencia de sesiones, número de sesiones, duración del programa, series, repeticiones, carga, tempo, progresión, descanso, localización o guía ecográfica, comparador.
 - No completes con valores típicos, no deduzcas y no conviertas unidades. Si un estudio no da un parámetro, no lo pongas.
 - Cada parámetro lleva "ref" (el número del artículo) y "cita": el fragmento literal del resumen donde aparece, copiado tal cual en el idioma original, de 4 a 25 palabras.
 - Agrupa por técnica y por estudio: un protocolo es una intervención concreta tal como la aplicó un estudio (o una guía). Si varios estudios aplican la misma técnica con parámetros distintos, son protocolos distintos.
 - "poblacion": a quién se aplicó, tal como lo describe el estudio (patología, nº de participantes si aparece). "resultado": qué se observó con esa intervención frente al comparador, en una frase y sin valorar. No des recomendaciones ni te dirijas a un paciente.
+- Si es rehabilitación tras una cirugía o un programa por fases, rellena "fases" en orden: nombre de la fase, "semanas" (p. ej. "0-2 semanas tras la cirugía"), "contenido" (carga o apoyo permitido, rango de movilidad, ejercicios, restricciones) y "criterio" para pasar a la siguiente fase (p. ej. criterios de vuelta a la carrera o al deporte), cada fase con su "ref" y su "cita" literal. Si no hay fases descritas, deja "fases" vacío.
 - "sin_parametros": una frase indicando si muchos resúmenes no describen la dosis (es frecuente y es información útil).
 - Escribe "tecnica", "campo", "valor", "poblacion" y "resultado" en español. Máximo 8 protocolos, priorizando guías, revisiones y ensayos con parámetros más completos.
-- Responde SOLO con un objeto JSON: {"protocolos":[{"tecnica","poblacion","parametros":[{"campo","valor","ref","cita"}],"resultado","refs"}],"sin_parametros"}.`;
+- Responde SOLO con un objeto JSON: {"protocolos":[{"tecnica","poblacion","parametros":[{"campo","valor","ref","cita"}],"fases":[{"fase","semanas","contenido","criterio","ref","cita"}],"resultado","refs"}],"sin_parametros"}.`;
 const PROTOCOL_SCHEMA = {
   type: "object",
   properties: {
@@ -213,10 +214,19 @@ const PROTOCOL_SCHEMA = {
               additionalProperties: false,
             },
           },
+          fases: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { fase: { type: "string" }, semanas: { type: "string" }, contenido: { type: "string" }, criterio: { type: "string" }, ref: { type: "integer" }, cita: { type: "string" } },
+              required: ["fase", "semanas", "contenido", "criterio", "ref", "cita"],
+              additionalProperties: false,
+            },
+          },
           resultado: { type: "string" },
           refs: { type: "array", items: { type: "integer" } },
         },
-        required: ["tecnica", "poblacion", "parametros", "resultado", "refs"],
+        required: ["tecnica", "poblacion", "parametros", "fases", "resultado", "refs"],
         additionalProperties: false,
       },
     },
@@ -235,7 +245,11 @@ const PROTOCOL_TASK = {
       parametros: (Array.isArray(p.parametros) ? p.parametros : []).map(x => ({
         campo: String(x.campo || ""), valor: String(x.valor || ""), ref: Number.isInteger(x.ref) ? x.ref : 0, cita: String(x.cita || ""),
       })).filter(x => x.valor && x.ref),
-    })).filter(p => p.parametros.length);
+      fases: (Array.isArray(p.fases) ? p.fases : []).map(f => ({
+        fase: String(f.fase || ""), semanas: String(f.semanas || ""), contenido: String(f.contenido || ""), criterio: String(f.criterio || ""),
+        ref: Number.isInteger(f.ref) ? f.ref : 0, cita: String(f.cita || ""),
+      })).filter(f => (f.contenido || f.criterio) && f.ref),
+    })).filter(p => p.parametros.length || p.fases.length);
     out.sin_parametros = String(out.sin_parametros || "");
     return out;
   },

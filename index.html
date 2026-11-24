@@ -278,7 +278,7 @@ const DICT = {
   "tendinopatía del manguito rotador":"rotator cuff tendinopathy","manguito rotador":"rotator cuff",
   "capsulitis adhesiva":"adhesive capsulitis","hombro congelado":"frozen shoulder",
   "síndrome femoropatelar":"patellofemoral pain","sindrome femoropatelar":"patellofemoral pain","dolor femoropatelar":"patellofemoral pain",
-  "rotura de ligamento cruzado anterior":"anterior cruciate ligament reconstruction","lca":"anterior cruciate ligament",
+  "rotura de ligamento cruzado anterior":"anterior cruciate ligament|ACL","lca":"anterior cruciate ligament|ACL",
   "esguince de tobillo":"ankle sprain","inestabilidad crónica de tobillo":"chronic ankle instability",
   "artrosis de rodilla":"knee osteoarthritis","gonartrosis":"knee osteoarthritis","artrosis de cadera":"hip osteoarthritis","coxartrosis":"hip osteoarthritis",
   "túnel carpiano":"carpal tunnel syndrome","tunel carpiano":"carpal tunnel syndrome",
@@ -287,6 +287,22 @@ const DICT = {
   "síndrome del dolor trocantéreo":"greater trochanteric pain syndrome","fibromialgia":"fibromyalgia",
   "cefalea tensional":"tension-type headache","migraña":"migraine","disfunción temporomandibular":"temporomandibular disorders","atm":"temporomandibular disorders",
   "radiculopatía":"radiculopathy","ciática":"sciatica","ciatica":"sciatica","hernia discal":"disc herniation",
+  // Cirugías: varios sinónimos en inglés separados por | (se buscan con OR)
+  "reconstrucción del lca":"anterior cruciate ligament reconstruction|ACL reconstruction|ACLR","reconstrucción de lca":"anterior cruciate ligament reconstruction|ACL reconstruction|ACLR",
+  "plastia de lca":"anterior cruciate ligament reconstruction|ACL reconstruction|ACLR","ligamentoplastia":"anterior cruciate ligament reconstruction|ligament reconstruction",
+  "meniscectomía":"meniscectomy","menisectomía":"meniscectomy","sutura de menisco":"meniscal repair|meniscus repair","reparación meniscal":"meniscal repair|meniscus repair","menisco":"meniscus|meniscal",
+  "prótesis de rodilla":"total knee arthroplasty|total knee replacement|knee arthroplasty","prótesis total de rodilla":"total knee arthroplasty|total knee replacement","artroplastia de rodilla":"total knee arthroplasty|knee arthroplasty",
+  "prótesis de cadera":"total hip arthroplasty|total hip replacement|hip arthroplasty","prótesis total de cadera":"total hip arthroplasty|total hip replacement","artroplastia de cadera":"total hip arthroplasty|hip arthroplasty",
+  "prótesis de hombro":"shoulder arthroplasty|shoulder replacement","artroplastia de hombro":"shoulder arthroplasty|shoulder replacement",
+  "sutura del manguito":"rotator cuff repair","sutura del manguito rotador":"rotator cuff repair","reparación del manguito rotador":"rotator cuff repair",
+  "latarjet":"Latarjet","bankart":"Bankart repair|arthroscopic Bankart","estabilización de hombro":"shoulder stabilization|shoulder instability surgery",
+  "acromioplastia":"subacromial decompression|acromioplasty","descompresión subacromial":"subacromial decompression",
+  "rotura del aquiles":"Achilles tendon rupture","rotura del tendón de aquiles":"Achilles tendon rupture","sutura del aquiles":"Achilles tendon repair|Achilles tendon rupture",
+  "artroscopia de cadera":"hip arthroscopy|femoroacetabular impingement surgery","artroscopia de hombro":"shoulder arthroscopy","artroscopia de rodilla":"knee arthroscopy",
+  "discectomía":"discectomy|microdiscectomy","microdiscectomía":"microdiscectomy|discectomy","artrodesis lumbar":"lumbar fusion|spinal fusion","fusión lumbar":"lumbar fusion|spinal fusion",
+  "fractura de radio distal":"distal radius fracture","fractura de muñeca":"distal radius fracture|wrist fracture","fractura de tobillo":"ankle fracture","fractura de cadera":"hip fracture",
+  "liberación del túnel carpiano":"carpal tunnel release","osteotomía tibial":"high tibial osteotomy",
+  "rehabilitación":"rehabilitation","fisioterapia":"physiotherapy|physical therapy","postoperatorio":"postoperative","postquirúrgico":"postoperative","postquirúrgica":"postoperative","cirugía":"surgery","operación":"surgery",
   "puntos gatillo":"myofascial trigger points","dolor miofascial":"myofascial pain","tendinopatía":"tendinopathy","tendinopatia":"tendinopathy"
 };
 const TECH = [
@@ -296,6 +312,7 @@ const TECH = [
   {id:"rf", label:"Radiofrecuencia / diatermia", q:'("radiofrequency" OR "capacitive-resistive" OR "diathermy" OR "TECAR")'},
   {id:"eco", label:"Guiado por ecografía", q:'("ultrasound-guided" OR "ultrasound guided")'},
   {id:"ex", label:"Ejercicio", q:'("exercise therapy" OR "exercise" OR "resistance training" OR "loading program")'},
+  {id:"postq", label:"Rehabilitación postquirúrgica", q:'("rehabilitation" OR "postoperative rehabilitation" OR "physiotherapy" OR "physical therapy" OR "return to sport" OR "accelerated rehabilitation")'},
   {id:"tm", label:"Terapia manual", q:'("manual therapy" OR "joint mobilization" OR "spinal manipulation" OR "soft tissue mobilization")'}
 ];
 const TIERS = [
@@ -338,19 +355,21 @@ const REGIONS = {
   "Rodilla":["tendinopatía rotuliana","síndrome femoropatelar","artrosis de rodilla","lca"],
   "Tobillo y pie":["tendinopatía aquílea","esguince de tobillo","inestabilidad crónica de tobillo","fascitis plantar"],
   "Cabeza y ATM":["cefalea tensional","disfunción temporomandibular"],
+  "Cirugías":["reconstrucción del LCA","sutura de menisco","prótesis de rodilla","prótesis de cadera","sutura del manguito rotador","Latarjet","rotura del tendón de Aquiles","artroscopia de cadera","discectomía","artrodesis lumbar","fractura de radio distal","fractura de tobillo"],
   "Muscular":["lesión de isquiotibiales","dolor miofascial","fibromialgia"]
 };
 function translate(q){
-  let out = " "+q.toLowerCase().trim()+" ";
+  const fold = t=>t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  let out = " "+fold(q.trim())+" ";
   const keys = Object.keys(DICT).sort((a,b)=>b.length-a.length);
   const hits=[];
   for (const k of keys){
-    const re = new RegExp("(^|[^\\p{L}])"+k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?=$|[^\\p{L}])","gu");
+    const re = new RegExp("(^|[^\\p{L}])"+fold(k).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?=$|[^\\p{L}])","gu");
     if (re.test(out)){ const idx=hits.length; out = out.replace(re,(m,pre)=>pre+" \u0000"+idx+"\u0000 "); hits.push(DICT[k]); }
   }
-  const STOP = new Set("tratamiento tratamientos tratar terapia evidencia sobre que qué del de la el los las en con para por y o un una al cual cuál mejor eficacia efectividad pacientes paciente".split(" "));
+  const STOP = new Set("tratamiento tratamientos tratar terapia evidencia sobre que del de la el los las en con para por y o un una al cual mejor eficacia efectividad pacientes paciente tras despues protocolo protocolos".split(" "));
   out = out.split(/\s+/).filter(w=>!STOP.has(w)).join(" ");
-  out = out.replace(/\u0000(\d+)\u0000/g,(m,i)=>'"'+hits[+i]+'"').replace(/\s+/g," ").trim();
+  out = out.replace(/\u0000(\d+)\u0000/g,(m,i)=>{ const syn=hits[+i].split("|"); return syn.length>1 ? "("+syn.map(x=>'"'+x+'"').join(" OR ")+")" : '"'+syn[0]+'"'; }).replace(/\s+/g," ").trim();
   return {query: out, translated: hits.length>0};
 }
 function conclusion(abs){
@@ -391,7 +410,7 @@ async function run(opts={}){
   const yrs = +$("#years").value;
   if (yrs){ const y=new Date().getFullYear(); parts.push("PUB_YEAR:["+(y-yrs)+" TO "+y+"]"); }
   const base = parts.join(" AND ");
-  $("#qinfo").textContent = "Consulta enviada: "+base;
+  $("#qinfo").textContent = "Se busca en título, resumen, palabras clave, términos MeSH y, en los artículos de acceso abierto, también en el texto completo. Consulta enviada: "+base;
 
   addRecent(raw.trim(), [...state.tech]);
   state.current = {question: raw.trim() + (techs.length ? " (técnicas: "+techs.map(t=>t.label).join(", ")+")" : ""), base, articles: [], autoTried: !!opts.noAuto};
@@ -850,7 +869,9 @@ async function extractProtocols(cur){
 function srcLink(a, n){ return "<a class='ref' href='"+esc(a.url)+"' target='_blank' rel='noopener' title='"+esc(a.title)+"'>["+n+"]</a>"; }
 function renderProtocols(d, ctx){
   PR.data=d; const n=ctx.articles.length;
-  const list=(d.protocolos||[]).map(p=>({...p, parametros:(p.parametros||[]).filter(x=>Number.isInteger(x.ref)&&x.ref>=1&&x.ref<=n)})).filter(p=>p.parametros.length);
+  // Las fases (rehabilitación postquirúrgica) se muestran y se guardan como filas más, en orden, antes del resto de parámetros.
+  const fasesRows=p=>(p.fases||[]).map(f=>({campo:(f.fase||"Fase")+(f.semanas?" ("+f.semanas+")":""), valor:[f.contenido, f.criterio?"Para pasar de fase: "+f.criterio:""].filter(Boolean).join(". "), ref:f.ref, cita:f.cita}));
+  const list=(d.protocolos||[]).map(p=>({...p, parametros:[...fasesRows(p), ...(p.parametros||[])].filter(x=>Number.isInteger(x.ref)&&x.ref>=1&&x.ref<=n&&x.valor)})).filter(p=>p.parametros.length);
   PR.list=list;
   let html="<div class='card sumcard'><h2>Parámetros encontrados <span class='meta'>· "+esc(ctx.question)+"</span></h2>";
   if (!list.length) html+="<p class='empty'>Los resúmenes de estos estudios no describen la dosis de la intervención. Suele estar en el texto completo: abre los artículos.</p>";
