@@ -301,20 +301,21 @@ async function callGemini(env, userText, task) {
   const models = [...new Set([env.GEMINI_MODEL, ...GEMINI_FALLBACKS].filter(Boolean))];
   const errors = [];
   for (const model of models) {
-    // Hasta 3 intentos por modelo, esperando 1 s y 3 s entre ellos si Google está saturado.
-    for (const wait of [0, 1000, 3000]) {
-      if (wait) await sleep(wait);
+    // Hasta 4 intentos por modelo, con espera creciente (y algo aleatoria) si Google está saturado.
+    for (const wait of [0, 1500, 4000, 8000]) {
+      if (wait) await sleep(wait + Math.random() * 1000);
       const r = await geminiOnce(env, model, userText, task);
       if (r.ok) return r.out;
       errors.push(model + ": " + r.status);
       if (r.fatal) throw r.fatal;
       if (!r.retry) break;           // p. ej. 404: este modelo no existe, pasar al siguiente
+      if (r.status === 429) break;   // límite de este modelo: probar directamente el siguiente
     }
   }
   const all429 = errors.every(e => e.endsWith(": 429"));
   throw fail(all429
-    ? "Has llegado al límite gratuito de Gemini por ahora. Prueba en un minuto o mañana, o usa Copiar para Claude."
-    : "Gemini está saturado ahora mismo. Prueba en unos minutos o usa Copiar para Claude.", all429 ? 429 : 503, errors.join(", "));
+    ? "Has llegado al límite gratuito de Gemini por ahora"
+    : "Gemini está saturado ahora mismo", all429 ? 429 : 503, errors.join(", "));
 }
 
 async function geminiOnce(env, model, userText, task) {

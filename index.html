@@ -583,15 +583,35 @@ function copyForClaude(){
     msg.innerHTML="Tu navegador no deja copiar automáticamente. Mantén pulsado el texto, selecciona todo y copia:<textarea readonly style='width:100%;height:160px;margin-top:6px'>"+esc(txt)+"</textarea>";
   });
 }
+// Llama al servicio y, si Gemini está saturado o hay un corte de red, vuelve a intentarlo sola con esperas crecientes.
+const RETRY_WAITS=[10,20,40,60];
+async function svcCall(path, body, onWait){
+  const svc=getSvc();
+  for (let i=0;;i++){
+    let res, data, net=false;
+    try{
+      res=await fetch(svc.url.replace(/\/+$/,"")+path,{method:"POST",headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},body});
+      data=await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
+    }catch(e){ net=true; }
+    if (!net && res.ok && !data.error) return data;
+    const busy = net || [429,500,502,503,504].includes(res.status);
+    if (!busy) throw new Error(data.error||("HTTP "+res.status));
+    if (i>=RETRY_WAITS.length){
+      if (net) throw new Error("No hay conexión con el servicio. Comprueba internet e inténtalo de nuevo");
+      throw new Error(res.status===429 ? "Se ha agotado el límite gratuito de Gemini por ahora. Prueba dentro de un rato o usa Copiar para Claude" : "Gemini sigue saturado después de varios intentos. Prueba dentro de unos minutos o usa Copiar para Claude");
+    }
+    for (let t=RETRY_WAITS[i]; t>0; t--){ onWait && onWait(t, i+2, RETRY_WAITS.length+1); await new Promise(r=>setTimeout(r,1000)); }
+    onWait && onWait(0, i+2, RETRY_WAITS.length+1);
+  }
+}
+function waitText(t, n, tot){ return t ? "Gemini está saturado. Lo vuelvo a intentar sola en "+t+" s (intento "+n+" de "+tot+")…" : "Reintentando (intento "+n+" de "+tot+")…"; }
 async function summarize(){
   const svc=getSvc(), el=$("#summary"), cur=state.current;
   el.innerHTML="<h2>Resumen de la evidencia</h2><p class='empty'>Leyendo "+cur.articles.length+" resúmenes… suele tardar entre 20 y 60 segundos.</p>";
   cur.loading=true;
   try{
-    const res = await fetch(svc.url.replace(/\/+$/,""), {method:"POST", headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},
-      body: JSON.stringify({question: cur.question, articles: cur.articles.map(a=>({title:a.title, year:a.year, type:(TIERS.find(t=>t.key===a.tier)||{}).badge, abstract:a.abs}))})});
-    const data = await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
-    if (!res.ok || data.error) throw new Error(data.error || ("HTTP "+res.status));
+    const data = await svcCall("", JSON.stringify({question: cur.question, articles: cur.articles.map(a=>({title:a.title, year:a.year, type:(TIERS.find(t=>t.key===a.tier)||{}).badge, abstract:a.abs}))}),
+      (t,n,tot)=>{ if(state.current===cur && $("#summary")) $("#summary").innerHTML="<h2>Resumen de la evidencia</h2><p class='empty'>"+waitText(t,n,tot)+"</p>"; });
     cur.loading=false;
     if (state.current!==cur) return;
     sumPut(cur.base, data); renderSummary(data);
@@ -643,9 +663,7 @@ async function makeHistory(){
   if (H.listening){ H.listening=false; H.rec && H.rec.stop(); }
   msg.textContent="Creando la historia… suele tardar entre 10 y 40 segundos.";
   try{
-    const res=await fetch(svc.url.replace(/\/+$/,"")+"/historia",{method:"POST",headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},body:JSON.stringify({transcript:txt, ficticio:true})});
-    const data=await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
-    if (!res.ok || data.error) throw new Error(data.error||("HTTP "+res.status));
+    const data=await svcCall("/historia", JSON.stringify({transcript:txt, ficticio:true}), (t,n,tot)=>{ msg.textContent=waitText(t,n,tot); });
     H.data=data; msg.textContent=""; renderHistory(data, txt);
   }catch(e){ msg.textContent="No se pudo crear la historia: "+e.message+". Si dice que el servicio no reconoce la petición, vuelve a pegar el código nuevo en Cloudflare."; }
 }
@@ -819,9 +837,7 @@ async function extractProtocols(cur){
   if (!svc.url){ msg.innerHTML="Para extraer los parámetros hace falta el servicio de resumen. Actívalo en <strong>Ajustes del resumen</strong>, abajo del todo."; return; }
   msg.textContent="Leyendo "+ctx.articles.length+" resúmenes y buscando dosis, sesiones y series… suele tardar entre 20 y 60 segundos.";
   try{
-    const res=await fetch(svc.url.replace(/\/+$/,"")+"/protocolo",{method:"POST",headers:{"Content-Type":"application/json","X-Access-Code":svc.code||""},body:protoBody(ctx)});
-    const data=await res.json().catch(()=>({error:"Respuesta no válida del servicio"}));
-    if (!res.ok || data.error) throw new Error(data.error||("HTTP "+res.status));
+    const data=await svcCall("/protocolo", protoBody(ctx), (t,n,tot)=>{ if(PR.ctx===ctx) msg.textContent=waitText(t,n,tot); });
     if (!Array.isArray(data.protocolos)) throw new Error("El servicio no reconoce los protocolos. Vuelve a pegar el código del servicio en Cloudflare (ver LEEME).");
     if (PR.ctx!==ctx) return;
     protoCachePut(ctx.base, data); msg.textContent=""; renderProtocols(data, ctx);
